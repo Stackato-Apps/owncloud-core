@@ -1,0 +1,11 @@
+name: owncloud
+instances: 1
+framework:
+  type: php
+mem: 128
+services:
+  ${name}-db: mysql
+  ${name}-fs: filesystem
+hooks:
+  pre-running:
+      - ln -s $STACKATO_FILESYSTEM data
