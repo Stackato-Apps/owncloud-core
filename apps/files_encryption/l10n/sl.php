@@ -1,6 +1,7 @@
 <?php $TRANSLATIONS = array(
 "Encryption" => "Šifriranje",
-"Exclude the following file types from encryption" => "Naslednje vrste datotek naj se ne šifrirajo",
-"None" => "Brez",
-"Enable Encryption" => "Omogoči šifriranje"
+"File encryption is enabled." => "Šifriranje datotek je omogočeno.",
+"The following file types will not be encrypted:" => "Navedene vrste datotek ne bodo šifrirane:",
+"Exclude the following file types from encryption:" => "Izloči navedene vrste datotek med šifriranjem:",
+"None" => "Brez"
 );

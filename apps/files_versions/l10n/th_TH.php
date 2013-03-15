@@ -1,4 +1,5 @@
 <?php $TRANSLATIONS = array(
-"Expire all versions" => "หมดอายุทุกรุ่น",
-"Enable Files Versioning" => "เปิดใช้งานคุณสมบัติการแยกสถานะรุ่นหรือเวอร์ชั่นของไฟล์"
+"History" => "ประวัติ",
+"Files Versioning" => "การกำหนดเวอร์ชั่นของไฟล์",
+"Enable" => "เปิดใช้งาน"
 );

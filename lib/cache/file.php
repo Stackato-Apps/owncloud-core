@@ -8,21 +8,21 @@
 
 
 class OC_Cache_File{
-	protected static $storage;
+	protected $storage;
 	protected function getStorage() {
-		if (isset(self::$storage)) {
-			return self::$storage;
+		if (isset($this->storage)) {
+			return $this->storage;
 		}
-		if(OC_User::isLoggedIn()){
+		if(OC_User::isLoggedIn()) {
 			$subdir = 'cache';
-			$view = new OC_FilesystemView('/'.OC_User::getUser());
+			$view = new \OC\Files\View('/'.OC_User::getUser());
 			if(!$view->file_exists($subdir)) {
 				$view->mkdir($subdir);
 			}
-			self::$storage = new OC_FilesystemView('/'.OC_User::getUser().'/'.$subdir);
-			return self::$storage;
+			$this->storage = new \OC\Files\View('/'.OC_User::getUser().'/'.$subdir);
+			return $this->storage;
 		}else{
-			OC_Log::write('core','Can\'t get cache storage, user not logged in', OC_Log::ERROR);
+			OC_Log::write('core', 'Can\'t get cache storage, user not logged in', OC_Log::ERROR);
 			return false;
 		}
 	}
@@ -61,18 +61,18 @@ class OC_Cache_File{
 
 	public function remove($key) {
 		$storage = $this->getStorage();
-		if(!$storage){
+		if(!$storage) {
 			return false;
 		}
 		return $storage->unlink($key);
 	}
 
-	public function clear($prefix=''){
+	public function clear($prefix='') {
 		$storage = $this->getStorage();
-		if($storage and $storage->is_dir('/')){
+		if($storage and $storage->is_dir('/')) {
 			$dh=$storage->opendir('/');
-			while($file=readdir($dh)){
-				if($file!='.' and $file!='..' and ($prefix==='' || strpos($file, $prefix) === 0)){
+			while($file=readdir($dh)) {
+				if($file!='.' and $file!='..' and ($prefix==='' || strpos($file, $prefix) === 0)) {
 					$storage->unlink('/'.$file);
 				}
 			}

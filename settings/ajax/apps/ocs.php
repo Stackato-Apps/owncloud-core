@@ -6,14 +6,11 @@
  * See the COPYING-README file.
  */
 
-// Init owncloud
-require_once('../../../lib/base.php');
-
 OC_JSON::checkAdminUser();
 
-$l = OC_L10N::get('core');
+$l = OC_L10N::get('settings');
 
-if(OC_Config::getValue('appstoreenabled', true)==false){
+if(OC_Config::getValue('appstoreenabled', true)==false) {
 	OCP\JSON::success(array('type' => 'external', 'data' => array()));
 }
 
@@ -26,15 +23,16 @@ if(is_null($enabledApps)) {
 $apps=array();
 
 // apps from external repo via OCS
-$catagoryNames=OC_OCSClient::getCategories();
-if(is_array($catagoryNames)){
-	$categories=array_keys($catagoryNames);
+$categoryNames=OC_OCSClient::getCategories();
+if(is_array($categoryNames)) {
+	$categories=array_keys($categoryNames);
 	$page=0;
-	$externalApps=OC_OCSClient::getApplications($categories,$page);
-	foreach($externalApps as $app){
+	$filter='approved';
+	$externalApps=OC_OCSClient::getApplications($categories, $page, $filter);
+	foreach($externalApps as $app) {
 		// show only external apps that aren't enabled yet
 		$local=false;
-		foreach($enabledApps as $a){
+		foreach($enabledApps as $a) {
 			if($a == $app['name']) {
 				$local=true;
 			}
@@ -42,9 +40,14 @@ if(is_array($catagoryNames)){
 
 		if(!$local) {
 			if($app['preview']=='') {
-				$pre='trans.png';
+				$pre=OC_Helper::imagePath('settings', 'trans.png');
 			} else {
 				$pre=$app['preview'];
+			}
+			if($app['label']=='recommended') {
+				$label='3rd Party';
+			} else {
+				$label='Recommended';
 			}
 			$apps[]=array(
 				'name'=>$app['name'],
@@ -55,11 +58,11 @@ if(is_array($catagoryNames)){
 				'license'=>$app['license'],
 				'preview'=>$pre,
 				'internal'=>false,
-				'internallabel'=>'3rd Party App',
+				'internallabel'=>$label,
+				'update'=>false,
 			);
 		}
 	}
 }
 
 OCP\JSON::success(array('type' => 'external', 'data' => $apps));
-

@@ -21,49 +21,39 @@
 *
 */
 
-require_once('../lib/base.php');
 OC_Util::checkAdminUser();
+OC_App::loadApps();
 
 // Load the files we need
 OC_Util::addStyle( "settings", "settings" );
-OC_Util::addScript( "settings", "apps" );
 OC_App::setActiveNavigationEntry( "core_apps" );
 
-$registeredApps=OC_App::getAllApps();
-$apps=array();
+function app_sort( $a, $b ) {
 
-//TODO which apps do we want to blacklist and how do we integrate blacklisting with the multi apps folder feature
-$blacklist=array('files');//we dont want to show configuration for these
+	if ($a['active'] != $b['active']) {
 
-foreach($registeredApps as $app){
-	if(array_search($app,$blacklist)===false){
-		$info=OC_App::getAppInfo($app);
-		$active=(OC_Appconfig::getValue($app,'enabled','no')=='yes')?true:false;
-		$info['active']=$active;
-		if(isset($info['shipped']) and ($info['shipped']=='true')) {
-			$info['internal']=true;
-			$info['internallabel']='Internal App';
-		}else{
-			$info['internal']=false;
-			$info['internallabel']='3rd Party App';
-		}
-		$info['preview']='trans.png';
-		$info['version']=OC_App::getAppVersion($app);
-		$apps[]=$info;
-	}
-}
-
-function app_sort($a, $b){
-	if ($a['active'] != $b['active']){
 		return $b['active'] - $a['active'];
+
 	}
+
+	if ($a['internal'] != $b['internal']) {
+		return $b['internal'] - $a['internal'];
+	}
+
 	return strcmp($a['name'], $b['name']);
+
 }
-usort($apps, 'app_sort');
+
+$combinedApps = OC_App::listAllApps();
+usort( $combinedApps, 'app_sort' );
 
 $tmpl = new OC_Template( "settings", "apps", "user" );
-$tmpl->assign('apps',$apps, false);
+
+$tmpl->assign('apps', $combinedApps);
+
 $appid = (isset($_GET['appid'])?strip_tags($_GET['appid']):'');
-$tmpl->assign('appid',$appid);
+
+$tmpl->assign('appid', $appid);
 
 $tmpl->printPage();
+

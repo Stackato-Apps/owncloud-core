@@ -94,4 +94,9 @@ return array(
 	'sgf' => 'application/sgf',
 	'cdr' => 'application/coreldraw',
 	'impress' => 'text/impress',
+	'ai' => 'application/illustrator',
+	'epub' => 'application/epub+zip',
+	'mobi' => 'application/x-mobipocket-ebook',
+	'exe' => 'application',
+	'msi' => 'application'
 );

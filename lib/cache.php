@@ -38,14 +38,14 @@ class OC_Cache {
 			if (!self::$global_cache_fast && function_exists('apc_store')) {
 				self::$global_cache_fast = new OC_Cache_APC(true);
 			}
-			
+
 			self::$global_cache = new OC_Cache_FileGlobal();
 			if (self::$global_cache_fast) {
 				self::$global_cache = new OC_Cache_Broker(self::$global_cache_fast, self::$global_cache);
 			}
 		}
-		if($fast){
-			if(self::$global_cache_fast){
+		if($fast) {
+			if(self::$global_cache_fast) {
 				return self::$global_cache_fast;
 			}else{
 				return false;
@@ -67,15 +67,15 @@ class OC_Cache {
 			if (!self::$user_cache_fast && function_exists('apc_store')) {
 				self::$user_cache_fast = new OC_Cache_APC();
 			}
-			
+
 			self::$user_cache = new OC_Cache_File();
 			if (self::$user_cache_fast) {
 				self::$user_cache = new OC_Cache_Broker(self::$user_cache_fast, self::$user_cache);
 			}
 		}
 
-		if($fast){
-			if(self::$user_cache_fast){
+		if($fast) {
+			if(self::$user_cache_fast) {
 				return self::$user_cache_fast;
 			}else{
 				return false;
@@ -138,10 +138,19 @@ class OC_Cache {
 	 * @return true
 	 */
 	static public function isFast() {
-		if(is_null(self::$isFast)){
+		if(is_null(self::$isFast)) {
 			self::$isFast=function_exists('xcache_set') || function_exists('apc_store');
 		}
 		return self::$isFast;
 	}
 
+	static public function generateCacheKeyFromFiles($files) {
+		$key = '';
+		sort($files);
+		foreach($files as $file) {
+			$stat = stat($file);
+			$key .= $file.$stat['mtime'].$stat['size'];
+		}
+		return md5($key);
+	}
 }

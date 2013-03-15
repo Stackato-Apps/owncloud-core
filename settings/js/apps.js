@@ -7,18 +7,6 @@
 
 OC.Settings = OC.Settings || {};
 OC.Settings.Apps = OC.Settings.Apps || {
-	loadOCS:function() {
-		$.getJSON(OC.filePath('settings', 'ajax', 'apps/ocs.php'), function(jsondata) {
-			if(jsondata.status == 'success'){
-				var apps = jsondata.data;
-				$.each(apps, function(b, appdata) {
-					OC.Settings.Apps.insertApp(appdata);
-				});
-			} else {
-				OC.dialogs.alert(jsondata.data.message, t('core', 'Error'));
-			}
-		});
-	},
 	loadApp:function(app) {
 		var page = $('#rightcontent');
 		page.find('p.license').show();
@@ -29,21 +17,33 @@ OC.Settings.Apps = OC.Settings.Apps || {
 		} else {
 			page.find('span.version').text('');
 		}
+		page.find('span.score').html(app.score);
 		page.find('p.description').text(app.description);
 		page.find('img.preview').attr('src', app.preview);
 		page.find('small.externalapp').attr('style', 'visibility:visible');
 		page.find('span.author').text(app.author);
 		page.find('span.licence').text(app.licence);
 
+		if (app.update != false) {
+			page.find('input.update').show();
+			page.find('input.update').data('appid', app.id);
+			page.find('input.update').attr('value',t('settings', 'Update to {appversion}', {appversion:app.update}));
+		} else {
+			page.find('input.update').hide();
+		}
+
 		page.find('input.enable').show();
 		page.find('input.enable').val((app.active) ? t('settings', 'Disable') : t('settings', 'Enable'));
 		page.find('input.enable').data('appid', app.id);
 		page.find('input.enable').data('active', app.active);
 		if (app.internal == false) {
+			page.find('span.score').show();
 			page.find('p.appslink').show();
 			page.find('a').attr('href', 'http://apps.owncloud.com/content/show.php?content=' + app.id);
+			page.find('small.externalapp').hide();
 		} else {
 			page.find('p.appslink').hide();
+			page.find('span.score').hide();
 		}
 	},
 	enableApp:function(appid, active, element) {
@@ -52,6 +52,7 @@ OC.Settings.Apps = OC.Settings.Apps || {
 		appData = appitem.data('app');
 		appData.active = !active;
 		appitem.data('app', appData);
+		element.val(t('settings','Please wait....'));
 		if(active) {
 			$.post(OC.filePath('settings','ajax','disableapp.php'),{appid:appid},function(result) {
 				if(!result || result.status!='success') {
@@ -59,6 +60,7 @@ OC.Settings.Apps = OC.Settings.Apps || {
 				}
 				else {
 					element.data('active',false);
+					OC.Settings.Apps.removeNavigation(appid);
 					element.val(t('settings','Enable'));
 				}
 			},'json');
@@ -69,6 +71,7 @@ OC.Settings.Apps = OC.Settings.Apps || {
 					OC.dialogs.alert('Error while enabling app','Error');
 				}
 				else {
+					OC.Settings.Apps.addNavigation(appid);
 					element.data('active',true);
 					element.val(t('settings','Disable'));
 				}
@@ -76,6 +79,20 @@ OC.Settings.Apps = OC.Settings.Apps || {
 			$('#leftcontent li[data-id="'+appid+'"]').addClass('active');
 		}
 	},
+	updateApp:function(appid, element) {
+		console.log('updateApp:', appid, element);
+		element.val(t('settings','Updating....'));
+		$.post(OC.filePath('settings','ajax','updateapp.php'),{appid:appid},function(result) {
+			if(!result || result.status!='success') {
+				OC.dialogs.alert(t('settings','Error while updating app'),t('settings','Error'));
+			}
+			else {
+				element.val(t('settings','Updated'));
+				element.hide();
+			}
+		},'json');
+	},
+
 	insertApp:function(appdata) {
 		var applist = $('#leftcontent li');
 		var app =
@@ -95,18 +112,50 @@ OC.Settings.Apps = OC.Settings.Apps || {
 			applist.last().after(app);
 		}
 		return app;
+	},
+	removeNavigation: function(appid){
+		$.getJSON(OC.filePath('settings', 'ajax', 'navigationdetect.php'), {app: appid}).done(function(response){
+			if(response.status === 'success'){
+				var navIds=response.nav_ids;
+				for(var i=0; i< navIds.length; i++){
+					$('#apps').children('li[data-id="'+navIds[i]+'"]').remove();
+				}
+			}
+		});
+	},
+	addNavigation: function(appid){
+		$.getJSON(OC.filePath('settings', 'ajax', 'navigationdetect.php'), {app: appid}).done(function(response){
+			if(response.status === 'success'){
+				var navEntries=response.nav_entries;
+				for(var i=0; i< navEntries.length; i++){
+					var entry = navEntries[i];
+					var container = $('#apps');
+
+					if(container.children('li[data-id="'+entry.id+'"]').length === 0){
+						var li=$('<li></li>');
+						li.attr('data-id', entry.id);
+						var img= $('<img class="icon"/>').attr({ src: entry.icon});
+						var a=$('<a></a>').attr('href', entry.href);
+						a.text(entry.name);
+						a.prepend(img);
+						li.append(a);
+						container.append(li);
+					}
+				}
+			}
+		});
 	}
-}
+};
 
 $(document).ready(function(){
 	$('#leftcontent li').each(function(index,li){
-		var app = $.parseJSON($(this).children('span').text());
+		var app = OC.get('appData_'+$(li).data('id'));
 		$(li).data('app',app);
 		$(this).find('span.hidden').remove();
 	});
 	$('#leftcontent li').keydown(function(event) {
 		if (event.which == 13 || event.which == 32) {
-			$(event.target).click()
+			$(event.target).click();
 		}
 		return false;
 	});
@@ -128,6 +177,13 @@ $(document).ready(function(){
 			OC.Settings.Apps.enableApp(appid, active, element);
 		}
 	});
+	$('#rightcontent input.update').click(function(){
+		var element = $(this);
+		var appid=$(this).data('appid');
+		if(appid) {
+			OC.Settings.Apps.updateApp(appid, element);
+		}
+	});
 
 	if(appid) {
 		var item = $('#leftcontent li[data-id="'+appid+'"]');
@@ -137,6 +193,4 @@ $(document).ready(function(){
 			$('#leftcontent').animate({scrollTop: $(item).offset().top-70}, 'slow','swing');
 		}
 	}
-
-	OC.Settings.Apps.loadOCS();
 });

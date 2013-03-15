@@ -21,9 +21,9 @@
 *
 */
 
-require_once('apps/user_webdavauth/user_webdavauth.php');
+require_once OC_App::getAppPath('user_webdavauth').'/user_webdavauth.php';
 
-OC_APP::registerAdmin('user_webdavauth','settings');
+OC_APP::registerAdmin('user_webdavauth', 'settings');
 
 OC_User::registerBackend("WEBDAVAUTH");
 OC_User::useBackend( "WEBDAVAUTH" );
@@ -35,4 +35,3 @@ $entry = array(
 	'href' => OC_Helper::linkTo( "user_webdavauth", "settings.php" ),
 	'name' => 'WEBDAVAUTH'
 );
-?>

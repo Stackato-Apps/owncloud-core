@@ -8,12 +8,11 @@ if(!OC_User::isLoggedIn()) {
 }
 
 session_write_close();
-
 // Get the params
-$dir = isset( $_REQUEST['dir'] ) ? stripslashes($_REQUEST['dir']) : '';
-$filename = isset( $_REQUEST['filename'] ) ? stripslashes($_REQUEST['filename']) : '';
+$dir = isset( $_REQUEST['dir'] ) ? '/'.trim($_REQUEST['dir'], '/\\') : '';
+$filename = isset( $_REQUEST['filename'] ) ? trim($_REQUEST['filename'], '/\\') : '';
 $content = isset( $_REQUEST['content'] ) ? $_REQUEST['content'] : '';
-$source = isset( $_REQUEST['source'] ) ? stripslashes($_REQUEST['source']) : '';
+$source = isset( $_REQUEST['source'] ) ? trim($_REQUEST['source'], '/\\') : '';
 
 if($source) {
 	$eventSource=new OC_EventSource();
@@ -39,7 +38,7 @@ function progress($notification_code, $severity, $message, $message_code, $bytes
 		case STREAM_NOTIFY_FILE_SIZE_IS:
 			$filesize = $bytes_max;
 			break;
-			
+
 		case STREAM_NOTIFY_PROGRESS:
 			if ($bytes_transferred > 0) {
 				if (!isset($filesize)) {
@@ -64,10 +63,12 @@ if($source) {
 	$ctx = stream_context_create(null, array('notification' =>'progress'));
 	$sourceStream=fopen($source, 'rb', false, $ctx);
 	$target=$dir.'/'.$filename;
-	$result=OC_Filesystem::file_put_contents($target, $sourceStream);
+	$result=\OC\Files\Filesystem::file_put_contents($target, $sourceStream);
 	if($result) {
-		$mime=OC_Filesystem::getMimetype($target);
-		$eventSource->send('success', $mime);
+		$meta = \OC\Files\Filesystem::getFileInfo($target);
+		$mime=$meta['mimetype'];
+		$id = $meta['fileid'];
+		$eventSource->send('success', array('mime'=>$mime, 'size'=>\OC\Files\Filesystem::filesize($target), 'id' => $id));
 	} else {
 		$eventSource->send('error', "Error while downloading ".$source. ' to '.$target);
 	}
@@ -75,12 +76,16 @@ if($source) {
 	exit();
 } else {
 	if($content) {
-		if(OC_Filesystem::file_put_contents($dir.'/'.$filename, $content)) {
-			OCP\JSON::success(array("data" => array('content'=>$content)));
+		if(\OC\Files\Filesystem::file_put_contents($dir.'/'.$filename, $content)) {
+			$meta = \OC\Files\Filesystem::getFileInfo($dir.'/'.$filename);
+			$id = $meta['fileid'];
+			OCP\JSON::success(array("data" => array('content'=>$content, 'id' => $id)));
 			exit();
 		}
-	}elseif(OC_Files::newFile($dir, $filename, 'file')) {
-		OCP\JSON::success(array("data" => array('content'=>$content)));
+	}elseif(\OC\Files\Filesystem::touch($dir . '/' . $filename)) {
+		$meta = \OC\Files\Filesystem::getFileInfo($dir.'/'.$filename);
+		$id = $meta['fileid'];
+		OCP\JSON::success(array("data" => array('content'=>$content, 'id' => $id)));
 		exit();
 	}
 }

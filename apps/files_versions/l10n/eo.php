@@ -1,4 +1,5 @@
 <?php $TRANSLATIONS = array(
-"Expire all versions" => "Eksvalidigi ĉiujn eldonojn",
-"Enable Files Versioning" => "Kapabligi dosiereldonkontrolon"
+"History" => "Historio",
+"Files Versioning" => "Dosiereldonigo",
+"Enable" => "Kapabligi"
 );

@@ -35,6 +35,8 @@ define('OC_USER_BACKEND_CREATE_USER',       0x000001);
 define('OC_USER_BACKEND_SET_PASSWORD',      0x000010);
 define('OC_USER_BACKEND_CHECK_PASSWORD',    0x000100);
 define('OC_USER_BACKEND_GET_HOME',			0x001000);
+define('OC_USER_BACKEND_GET_DISPLAYNAME',	0x010000);
+define('OC_USER_BACKEND_SET_DISPLAYNAME',	0x100000);
 
 
 /**
@@ -50,6 +52,8 @@ abstract class OC_User_Backend implements OC_User_Interface {
 		OC_USER_BACKEND_SET_PASSWORD => 'setPassword',
 		OC_USER_BACKEND_CHECK_PASSWORD => 'checkPassword',
 		OC_USER_BACKEND_GET_HOME => 'getHome',
+		OC_USER_BACKEND_GET_DISPLAYNAME => 'getDisplayName',
+		OC_USER_BACKEND_SET_DISPLAYNAME => 'setDisplayName',
 	);
 
 	/**
@@ -59,9 +63,9 @@ abstract class OC_User_Backend implements OC_User_Interface {
 	* Returns the supported actions as int to be
 	* compared with OC_USER_BACKEND_CREATE_USER etc.
 	*/
-	public function getSupportedActions(){
+	public function getSupportedActions() {
 		$actions = 0;
-		foreach($this->possibleActions AS $action => $methodName){
+		foreach($this->possibleActions AS $action => $methodName) {
 			if(method_exists($this, $methodName)) {
 				$actions |= $action;
 			}
@@ -78,7 +82,7 @@ abstract class OC_User_Backend implements OC_User_Interface {
 	* Returns the supported actions as int to be
 	* compared with OC_USER_BACKEND_CREATE_USER etc.
 	*/
-	public function implementsActions($actions){
+	public function implementsActions($actions) {
 		return (bool)($this->getSupportedActions() & $actions);
 	}
 
@@ -89,7 +93,7 @@ abstract class OC_User_Backend implements OC_User_Interface {
 	*
 	* Deletes a user
 	*/
-	public function deleteUser( $uid ){
+	public function deleteUser( $uid ) {
 		return false;
 	}
 
@@ -99,7 +103,7 @@ abstract class OC_User_Backend implements OC_User_Interface {
 	*
 	* Get a list of all users.
 	*/
-	public function getUsers($search = '', $limit = -1, $offset = 0) {
+	public function getUsers($search = '', $limit = null, $offset = null) {
 		return array();
 	}
 
@@ -108,7 +112,7 @@ abstract class OC_User_Backend implements OC_User_Interface {
 	* @param string $uid the username
 	* @return boolean
 	*/
-	public function userExists($uid){
+	public function userExists($uid) {
 		return false;
 	}
 
@@ -117,7 +121,39 @@ abstract class OC_User_Backend implements OC_User_Interface {
 	* @param string $uid the username
 	* @return boolean
 	*/
-	public function getHome($uid){
+	public function getHome($uid) {
+		return false;
+	}
+
+	/**
+	 * @brief get display name of the user
+	 * @param $uid user ID of the user
+	 * @return display name
+	 */
+	public function getDisplayName($uid) {
+		return $uid;
+	}
+
+	/**
+	 * @brief Get a list of all display names
+	 * @returns array with  all displayNames (value) and the corresponding uids (key)
+	 *
+	 * Get a list of all display names and user ids.
+	 */
+	public function getDisplayNames($search = '', $limit = null, $offset = null) {
+		$displayNames = array();
+		$users = $this->getUsers($search, $limit, $offset);
+		foreach ( $users as $user) {
+			$displayNames[$user] = $user;
+		}
+		return $displayNames;
+	}
+
+	/**
+	 * @brief Check if a user list is available or not
+	 * @return boolean if users can be listed or not
+	 */
+	public function hasUserListings() {
 		return false;
 	}
 }

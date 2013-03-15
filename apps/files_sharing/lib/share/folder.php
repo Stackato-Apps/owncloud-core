@@ -19,43 +19,33 @@
 * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-class OC_Share_Backend_Folder extends OC_Share_Backend_File {
-
-	public function formatItems($items, $format, $parameters = null) {
-		if ($format == self::FORMAT_SHARED_STORAGE) {
-			// Only 1 item should come through for this format call
-			return array('path' => $items[key($items)]['path'], 'permissions' => $items[key($items)]['permissions']);
-		} else if ($format == self::FORMAT_FILE_APP && isset($parameters['folder'])) {
-			// Only 1 item should come through for this format call
-			$folder = $items[key($items)];
-			if (isset($parameters['mimetype_filter'])) {
-				$mimetype_filter = $parameters['mimetype_filter'];
-			} else {
-				$mimetype_filter = '';
-			}
-			$path = $folder['path'].substr($parameters['folder'], 7 + strlen($folder['file_target']));
-			$files = OC_FileCache::getFolderContent($path, '', $mimetype_filter);
-			foreach ($files as &$file) {
-				$file['directory'] = $parameters['folder'];
-				$file['type'] = ($file['mimetype'] == 'httpd/unix-directory') ? 'dir' : 'file';
-				$file['permissions'] = $folder['permissions'];
-				if ($file['type'] == 'file') {
-					// Remove Create permission if type is file
-					$file['permissions'] &= ~OCP\Share::PERMISSION_CREATE;
-				}
-			}
-			return $files;
-		}
-		return array();
-	}
+class OC_Share_Backend_Folder extends OC_Share_Backend_File implements OCP\Share_Backend_Collection {
 
 	public function getChildren($itemSource) {
-		$files = OC_FileCache::getFolderContent($itemSource);
-		$sources = array();
-		foreach ($files as $file) {
-			$sources[] = $file['path'];
+		$children = array();
+		$parents = array($itemSource);
+		$query = \OC_DB::prepare('SELECT `id` FROM `*PREFIX*mimetypes` WHERE `mimetype` = ?');
+		$result = $query->execute(array('httpd/unix-directory'));
+		if ($row = $result->fetchRow()) {
+			$mimetype = $row['id'];
+		} else {
+			$mimetype = -1;
 		}
-		return $sources;
+		while (!empty($parents)) {
+			$parents = "'".implode("','", $parents)."'";
+			$query = OC_DB::prepare('SELECT `fileid`, `name`, `mimetype` FROM `*PREFIX*filecache`'
+				.' WHERE `parent` IN ('.$parents.')');
+			$result = $query->execute();
+			$parents = array();
+			while ($file = $result->fetchRow()) {
+				$children[] = array('source' => $file['fileid'], 'file_path' => $file['name']);
+				// If a child folder is found look inside it
+				if ($file['mimetype'] == $mimetype) {
+					$parents[] = $file['fileid'];
+				}
+			}
+		}
+		return $children;
 	}
 
 }

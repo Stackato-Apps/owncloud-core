@@ -1,6 +1,7 @@
 <?php $TRANSLATIONS = array(
-"Encryption" => "Kryptování",
-"Exclude the following file types from encryption" => "Při kryptování vynechat následující typy souborů",
-"None" => "Žádný",
-"Enable Encryption" => "Povolit kryptování"
+"Encryption" => "Šifrování",
+"File encryption is enabled." => "Šifrování je povoleno.",
+"The following file types will not be encrypted:" => "Následující typy souborů nebudou šifrovány:",
+"Exclude the following file types from encryption:" => "Vyjmout následující typy souborů ze šifrování:",
+"None" => "Žádné"
 );

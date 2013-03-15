@@ -1,4 +1,6 @@
 <?php $TRANSLATIONS = array(
-"Expire all versions" => "Kõikide versioonide aegumine",
-"Enable Files Versioning" => "Luba failide versioonihaldus"
+"success" => "korras",
+"failure" => "ebaõnnestus",
+"No old versions available" => "Vanu versioone pole saadaval",
+"No path specified" => "Asukohta pole määratud"
 );
