@@ -7,5 +7,7 @@ services:
   ${name}-db: mysql
   ${name}-fs: filesystem
 hooks:
+  post-staging:
+    - mkdir $STACKATO_FILESYSTEM/data
   pre-running:
-      - ln -s $STACKATO_FILESYSTEM data
+    - ln -s $STACKATO_FILESYSTEM/data data
