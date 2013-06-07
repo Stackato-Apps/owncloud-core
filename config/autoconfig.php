@@ -19,6 +19,8 @@ $AUTOCONFIG = array(
 "dbuser" => $url_parts{'user'},
 "dbpass" => $url_parts{'pass'},
 "dbhost" => $url_parts{'host'},
-"dbtableprefix" => "oc_"
+"dbtableprefix" => "oc_",
+"3rdpartyroot" => OC::$SERVERROOT."/3rdparty",
+"3rdpartyurl" => "/3rdparty"
 );
 ?>
