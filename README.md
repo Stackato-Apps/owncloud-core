@@ -24,3 +24,14 @@ https://www.transifex.com/projects/p/owncloud/
 
 For more detailed information about translations:
 http://owncloud.org/dev/translation/
+
+### Modified for Stackato:
+ownCloud will be pushed with a filesystem and mysql service, which will
+automatically be bound in.
+
+The default admin id is the email (or group name if group owned) of the
+owner who pushed the app to Stackato. The default password is 'changeme'.
+
+To deploy
+
+    stackato push -n
