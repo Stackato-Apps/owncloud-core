@@ -19,6 +19,18 @@
 				<notnull>true</notnull>
 				<length>64</length>
 			</field>
+			<field>
+				<name>recovery_enabled</name>
+				<type>integer</type>
+				<notnull>true</notnull>
+				<default>0</default>
+			</field>
+			<field>
+				<name>migration_status</name>
+				<type>integer</type>
+				<notnull>true</notnull>
+				<default>0</default>
+			</field>
 		</declaration>
 	</table>
 </database>

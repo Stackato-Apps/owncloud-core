@@ -26,6 +26,7 @@ class OC_Share_Backend_File implements OCP\Share_Backend_File_Dependent {
 	const FORMAT_FILE_APP_ROOT = 2;
 	const FORMAT_OPENDIR = 3;
 	const FORMAT_GET_ALL = 4;
+	const FORMAT_PERMISSIONS = 5;
 
 	private $path;
 
@@ -90,10 +91,17 @@ class OC_Share_Backend_File implements OCP\Share_Backend_File_Dependent {
 				$file['name'] = basename($item['file_target']);
 				$file['mimetype'] = $item['mimetype'];
 				$file['mimepart'] = $item['mimepart'];
-				$file['size'] = $item['size'];
 				$file['mtime'] = $item['mtime'];
 				$file['encrypted'] = $item['encrypted'];
 				$file['etag'] = $item['etag'];
+				$storage = \OC\Files\Filesystem::getStorage('/');
+				$cache = $storage->getCache();
+				if ($item['encrypted'] or ($item['unencrypted_size'] > 0 and $cache->getMimetype($item['mimetype']) === 'httpd/unix-directory')) {
+					$file['size'] = $item['unencrypted_size'];
+					$file['encrypted_size'] = $item['size'];
+				} else {
+					$file['size'] = $item['size'];
+				}
 				$files[] = $file;
 			}
 			return $files;
@@ -125,6 +133,12 @@ class OC_Share_Backend_File implements OCP\Share_Backend_File_Dependent {
 				$ids[] = $item['file_source'];
 			}
 			return $ids;
+		} else if ($format === self::FORMAT_PERMISSIONS) {
+			$filePermissions = array();
+			foreach ($items as $item) {
+				$filePermissions[$item['file_source']] = $item['permissions'];
+			}
+			return $filePermissions;
 		}
 		return array();
 	}
@@ -165,7 +179,7 @@ class OC_Share_Backend_File implements OCP\Share_Backend_File_Dependent {
 			$source['fileOwner'] = $fileOwner;
 			return $source;
 		}
-		\OCP\Util::writeLog('files_sharing', 'File source not found for: '.$target, \OCP\Util::ERROR);
+		\OCP\Util::writeLog('files_sharing', 'File source not found for: '.$target, \OCP\Util::DEBUG);
 		return false;
 	}
 

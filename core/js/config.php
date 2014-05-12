@@ -10,8 +10,8 @@
 header("Content-type: text/javascript");
 
 // Disallow caching
-header("Cache-Control: no-cache, must-revalidate"); 
-header("Expires: Sat, 26 Jul 1997 05:00:00 GMT"); 
+header("Cache-Control: no-cache, must-revalidate");
+header("Expires: Sat, 26 Jul 1997 05:00:00 GMT");
 
 // Enable l10n support
 $l = OC_L10N::get('core');
@@ -26,8 +26,6 @@ $array = array(
 	"oc_debug" => (defined('DEBUG') && DEBUG) ? 'true' : 'false',
 	"oc_webroot" => "\"".OC::$WEBROOT."\"",
 	"oc_appswebroots" =>  str_replace('\\/', '/', json_encode($apps_paths)), // Ugly unescape slashes waiting for better solution
-	"oc_current_user" =>  "\"".OC_User::getUser(). "\"",
-	"oc_requesttoken" =>  "\"".OC_Util::callRegister(). "\"",
 	"datepickerFormatDate" => json_encode($l->l('jsdate', 'jsdate')),
 	"dayNames" =>  json_encode(
 		array(
@@ -57,7 +55,16 @@ $array = array(
 		)
 	),
 	"firstDay" => json_encode($l->l('firstday', 'firstday')) ,
-	);
+	"oc_config" => json_encode(
+		array(
+			'session_lifetime' => \OCP\Config::getSystemValue('session_lifetime', ini_get('session.gc_maxlifetime')),
+			'session_keepalive' => \OCP\Config::getSystemValue('session_keepalive', true)
+		)
+	)
+);
+
+// Allow hooks to modify the output values
+OC_Hook::emit('\OCP\Config', 'js', array('array' => &$array));
 
 // Echo it
 foreach ($array as  $setting => $value) {

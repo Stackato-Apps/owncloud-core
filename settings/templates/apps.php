@@ -7,11 +7,14 @@
 	src="<?php print_unescaped(OC_Helper::linkToRoute('apps_custom'));?>?appid=<?php p($_['appid']); ?>"></script>
  <script type="text/javascript" src="<?php print_unescaped(OC_Helper::linkTo('settings/js', 'apps.js'));?>"></script>
 
-<div id="controls">
-	<a class="button" target="_blank" href="http://owncloud.org/dev"><?php p($l->t('Add your App'));?></a>
-	<a class="button" target="_blank" href="http://apps.owncloud.com"><?php p($l->t('More Apps'));?></a>
-</div>
-<ul id="leftcontent" class="applist hascontrols">
+
+<ul id="leftcontent" class="applist">
+	<?php if(OC_Config::getValue('appstoreenabled', true) === true): ?>
+	<li>
+		<a class="app-external" target="_blank" href="http://owncloud.org/dev"><?php p($l->t('Add your App'));?> …</a>
+	</li>
+	<?php endif; ?>
+
 	<?php foreach($_['apps'] as $app):?>
 	<li <?php if($app['active']) print_unescaped('class="active"')?> data-id="<?php p($app['id']) ?>"
 		<?php if ( isset( $app['ocs_id'] ) ) { print_unescaped("data-id-ocs=\"{".OC_Util::sanitizeHTML($app['ocs_id'])."}\""); } ?>
@@ -22,6 +25,12 @@
 			print_unescaped('<small class="'.OC_Util::sanitizeHTML($app['internalclass']).' list">'.OC_Util::sanitizeHTML($app['internallabel']).'</small>') ?>
 	</li>
 	<?php endforeach;?>
+
+	<?php if(OC_Config::getValue('appstoreenabled', true) === true): ?>
+	<li>
+		<a class="app-external" target="_blank" href="http://apps.owncloud.com"><?php p($l->t('More Apps'));?> …</a>
+	</li>
+	<?php endif; ?>
 </ul>
 <div id="rightcontent">
 	<div class="appinfo">
@@ -29,12 +38,20 @@
 		class="version"></span><small class="externalapp" style="visibility:hidden;"></small></h3>
 	<span class="score"></span>
 	<p class="description"></p>
-	<img src="" class="preview" />
-	<p class="appslink hidden"><a href="#" target="_blank"><?php
+	<p class="documentation hidden">
+		<?php p($l->t("Documentation:"));?>
+		<span class="userDocumentation appslink"></span>
+		<span class="adminDocumentation appslink"></span>
+	</p>
+	<img src="" class="preview hidden" />
+	<p class="appslink appstore hidden"><a id="appstorelink" href="#" target="_blank"><?php
 		p($l->t('See application page at apps.owncloud.com'));?></a></p>
+	<p class="appslink website hidden"><a id="websitelink" href="#" target="_blank"><?php
+		p($l->t('See application website'));?></a></p>
 	<p class="license hidden"><?php
 		print_unescaped($l->t('<span class="licence"></span>-licensed by <span class="author"></span>'));?></p>
 	<input class="enable hidden" type="submit" />
 	<input class="update hidden" type="submit" value="<?php p($l->t('Update')); ?>" />
+	<div class="warning hidden"></div>
 	</div>
 </div>

@@ -1,41 +1,40 @@
 body {
-	background:#ddd;
+	height: auto;
 }
 
 #header {
-	background:#1d2d44;
-	box-shadow:0 0 10px rgba(0,0,0,.5), inset 0 -2px 10px #222;
-	height:2.5em;
+	background-color: #1d2d44;
+	height:32px;
 	left:0;
-	line-height:2.5em;
+	line-height:32px;
 	position:fixed;
 	right:0;
 	top:0;
 	z-index:100;
-	padding:.5em;
+	padding:7px;
+}
+
+.header-right {
+	padding: 0;
+	height: 32px;
 }
 
 #details {
 	color:#fff;
+	-ms-filter: "progid:DXImageTransform.Microsoft.Alpha(Opacity=50)";
+	filter: alpha(opacity=50);
+	opacity: .5;
+	padding-right: 5px;
 }
 
-#header #download {
-	font-weight:700;
-	margin-left:2em;
-}
-
-#header #download img {
-	padding-left:.1em;
-	padding-right:.3em;
-	vertical-align:text-bottom;
+#controls {
+	left: 0;
 }
 
 #preview {
-	background:#eee;
-	border-bottom:1px solid #f8f8f8;
-	min-height:30em;
-	text-align:center;
-	margin:45px auto;
+	background: #fff;
+	text-align: center;
+	margin: 45px auto 0;
 }
 
 #noPreview {
@@ -43,12 +42,15 @@ body {
 	padding-top:5em;
 }
 
+footer {
+	margin-top: 45px;
+}
+
 p.info {
-	color:#777;
-	text-align:center;
-	text-shadow:#fff 0 1px 0;
-	width:22em;
-	margin:2em auto;
+	color: #777;
+	text-align: center;
+	margin: 0 auto;
+	padding: 20px 0;
 }
 
 p.info a {
@@ -69,7 +71,43 @@ p.info a {
 	max-width:100%;
 }
 
-thead{
-	background-color: white;
-	padding-left:0 !important; /* fixes multiselect bar offset on shared page */
+/* some margin for the file type icon */
+#imgframe .publicpreview {
+	margin-top: 10%;
+}
+
+thead {
+	padding-left: 0 !important; /* fixes multiselect bar offset on shared page */
+}
+
+#data-upload-form {
+	position: relative;
+	right: 0;
+	height: 32px;
+	overflow: hidden;
+	padding: 0;
+	float: right;
+	display: inline;
+	margin: 0;
+}
+
+.directDownload,
+.directLink {
+	margin-bottom: 20px;
+}
+.directDownload .button img {
+	vertical-align: text-bottom;
+}
+.directLink label {
+	font-weight: normal;
+	-ms-filter: "progid:DXImageTransform.Microsoft.Alpha(Opacity=50)";
+	filter: alpha(opacity=50);
+	opacity: .5;
+}
+.directLink input {
+	margin-left: 5px;
+	width: 300px;
+}
+.public_actions {
+	padding: 4px;
 }
