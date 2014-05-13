@@ -845,6 +845,14 @@ class OC_Util {
 	 *
 	 */
 	public static function isWebDAVWorking() {
+		// Force true for use with Stackato to avoid showing error message "Your 
+		// web server is not yet properly setup to allow files synchronization 
+		// because the WebDAV interface seems to be broken. Please double check 
+		// the installation guides." which may be inaccurate. See 
+		// https://github.com/owncloud/core/issues/6242 and 
+		// https://github.com/owncloud/core/issues/6275
+		return true;
+
 		if (!function_exists('curl_init')) {
 			return true;
 		}
