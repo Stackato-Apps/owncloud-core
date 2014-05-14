@@ -1,4 +1,4 @@
-name: owncloud
+name: owncloud-core
 instances: 1
 framework:
   type: php
