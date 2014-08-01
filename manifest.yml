@@ -1,0 +1,19 @@
+applications:
+- name: owncloud-core
+  framework:
+    name: php
+  instances: 1
+  mem: 128
+  services:
+    ${name}-db:
+      type: mysql
+    ${name}-fs:
+      type: filesystem
+  stackato:
+    hooks:
+      pre-push:
+      - git submodule update --init
+      post-staging:
+      - mkdir $STACKATO_FILESYSTEM/data
+      pre-running:
+      - ln -s $STACKATO_FILESYSTEM/data data
