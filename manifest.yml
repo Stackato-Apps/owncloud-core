@@ -13,6 +13,7 @@ applications:
       pre-push:
       - git submodule update --init
       post-staging:
+      - sh setup.sh
       - mkdir $STACKATO_FILESYSTEM/data
       pre-running:
       - ln -s $STACKATO_FILESYSTEM/data data

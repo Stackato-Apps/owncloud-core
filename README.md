@@ -37,14 +37,3 @@ The default admin login credentials are
 
     Username: stackato
     Password: changeme
-
-##### Stackato and automatic configuration caveat
-After initial deployment, each subsequent push will trigger the automatic configuration process to run again and cause a "Username is already being used" error. As a workaround, open the app (to trigger the automatic configuration process to generate the config file) after the initial push and copy the config file to the data directory (persisted on the filesystem).
-
-    stackato run cp config/config.php data/config.php
-
-Then after each subsequent push, run the following before opening the app
-
-    stackato run cp data/config.php config/config.php
-
-Note that opening the app before copying the config file back to the config directory will result in automatic logon failing. An "Automatic logon rejected!" warning will be display, but can be ignored. Proceed to login with appropriate credentials.
