@@ -1,7 +1,6 @@
 applications:
 - name: owncloud-core
-  framework:
-    name: php
+  buildpack: https://github.com/heroku/heroku-buildpack-php.git
   instances: 1
   mem: 128
   services:
@@ -17,3 +16,6 @@ applications:
       - mkdir $STACKATO_FILESYSTEM/data
       pre-running:
       - ln -s $STACKATO_FILESYSTEM/data data
+    requirements:
+      ubuntu:
+      - libjpeg62
