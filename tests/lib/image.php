@@ -8,8 +8,8 @@
 
 class Test_Image extends PHPUnit_Framework_TestCase {
 	public static function tearDownAfterClass() {
-		unlink(OC::$SERVERROOT.'/tests/data/testimage2.png');
-		unlink(OC::$SERVERROOT.'/tests/data/testimage2.jpg');
+		@unlink(OC::$SERVERROOT.'/tests/data/testimage2.png');
+		@unlink(OC::$SERVERROOT.'/tests/data/testimage2.jpg');
 	}
 
 	public function testGetMimeTypeForFile() {
@@ -62,14 +62,18 @@ class Test_Image extends PHPUnit_Framework_TestCase {
 		$img = new \OC_Image(OC::$SERVERROOT.'/tests/data/testimage.png');
 		$this->assertEquals('image/png', $img->mimeType());
 
+		$img = new \OC_Image(null);
+		$this->assertEquals('', $img->mimeType());
+
+		if (\OC_Util::runningOnWindows()) {
+			$this->markTestSkipped('[Windows] Images created with imagecreate() are pngs on windows');
+		}
+
 		$img = new \OC_Image(file_get_contents(OC::$SERVERROOT.'/tests/data/testimage.jpg'));
 		$this->assertEquals('image/jpeg', $img->mimeType());
 
 		$img = new \OC_Image(base64_encode(file_get_contents(OC::$SERVERROOT.'/tests/data/testimage.gif')));
 		$this->assertEquals('image/gif', $img->mimeType());
-
-		$img = new \OC_Image(null);
-		$this->assertEquals('', $img->mimeType());
 	}
 
 	public function testWidth() {
@@ -115,6 +119,9 @@ class Test_Image extends PHPUnit_Framework_TestCase {
 	public function testData() {
 		$img = new \OC_Image(OC::$SERVERROOT.'/tests/data/testimage.png');
 		$raw = imagecreatefromstring(file_get_contents(OC::$SERVERROOT.'/tests/data/testimage.png'));
+		// Preserve transparency
+		imagealphablending($raw, true);
+		imagesavealpha($raw, true);
 		ob_start();
 		imagepng($raw);
 		$expected = ob_get_clean();
@@ -235,5 +242,25 @@ class Test_Image extends PHPUnit_Framework_TestCase {
 		$this->assertTrue($img->fitIn(200, 250));
 		$this->assertEquals(200, $img->width());
 		$this->assertEquals(200, $img->height());
+	}
+
+	function convertDataProvider() {
+		return array(
+			array( 'image/gif'),
+			array( 'image/jpeg'),
+			array( 'image/png'),
+		);
+	}
+
+	/**
+	 * @dataProvider convertDataProvider
+	 */
+	public function testConvert($mimeType) {
+		$img = new \OC_Image(OC::$SERVERROOT.'/tests/data/testimage.png');
+		$tempFile = tempnam(sys_get_temp_dir(), 'img-test');
+
+		$img->save($tempFile, $mimeType);
+		$actualMimeType = \OC_Image::getMimeTypeForFile($tempFile);
+		$this->assertEquals($mimeType, $actualMimeType);
 	}
 }

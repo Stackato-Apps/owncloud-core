@@ -12,10 +12,30 @@ class Test_DB extends PHPUnit_Framework_TestCase {
 	protected static $schema_file = 'static://test_db_scheme';
 	protected $test_prefix;
 
+	/**
+	 * @var string
+	 */
+	private $table1;
+
+	/**
+	 * @var string
+	 */
+	private $table2;
+
+	/**
+	 * @var string
+	 */
+	private $table3;
+
+	/**
+	 * @var string
+	 */
+	private $table4;
+
 	public function setUp() {
 		$dbfile = OC::$SERVERROOT.'/tests/data/db_structure.xml';
 
-		$r = '_'.OC_Util::generateRandomBytes('4').'_';
+		$r = '_'.OC_Util::generateRandomBytes(4).'_';
 		$content = file_get_contents( $dbfile );
 		$content = str_replace( '*dbprefix*', '*dbprefix*'.$r, $content );
 		file_put_contents( self::$schema_file, $content );
@@ -122,10 +142,10 @@ class Test_DB extends PHPUnit_Framework_TestCase {
 		$query = OC_DB::prepare('SELECT `fullname`, `uri`, `carddata` FROM `*PREFIX*'.$this->table2.'` WHERE `uri` = ?');
 		$result = $query->execute(array($uri));
 		$this->assertTrue((bool)$result);
-		$row = $result->fetchRow();
-		$this->assertArrayHasKey('carddata', $row);
-		$this->assertEquals($carddata, $row['carddata']);
-		$this->assertEquals(1, $result->numRows());
+		$rowset = $result->fetchAll();
+		$this->assertEquals(1, count($rowset));
+		$this->assertArrayHasKey('carddata', $rowset[0]);
+		$this->assertEquals($carddata, $rowset[0]['carddata']);
 
 		// Try to insert a new row
 		$result = OC_DB::insertIfNotExist('*PREFIX*'.$this->table2,
@@ -138,13 +158,143 @@ class Test_DB extends PHPUnit_Framework_TestCase {
 		$query = OC_DB::prepare('SELECT `fullname`, `uri`, `carddata` FROM `*PREFIX*'.$this->table2.'` WHERE `uri` = ?');
 		$result = $query->execute(array($uri));
 		$this->assertTrue((bool)$result);
-		$row = $result->fetchRow();
-		$this->assertArrayHasKey('carddata', $row);
 		// Test that previously inserted data isn't overwritten
-		$this->assertEquals($carddata, $row['carddata']);
 		// And that a new row hasn't been inserted.
-		$this->assertEquals(1, $result->numRows());
+		$rowset = $result->fetchAll();
+		$this->assertEquals(1, count($rowset));
+		$this->assertArrayHasKey('carddata', $rowset[0]);
+		$this->assertEquals($carddata, $rowset[0]['carddata']);
+	}
 
+	public function testUtf8Data() {
+		$table = "*PREFIX*{$this->table2}";
+		$expected = "Ћö雙喜\xE2\x80\xA2";
+
+		$query = OC_DB::prepare("INSERT INTO `$table` (`fullname`, `uri`, `carddata`) VALUES (?, ?, ?)");
+		$result = $query->execute(array($expected, 'uri_1', 'This is a vCard'));
+		$this->assertEquals(1, $result);
+
+		$actual = OC_DB::prepare("SELECT `fullname` FROM `$table`")->execute()->fetchOne();
+		$this->assertSame($expected, $actual);
+	}
+
+	public function testDecimal() {
+		$table = "*PREFIX*" . $this->table4;
+		$rowname = 'decimaltest';
+
+		// Insert, select and delete decimal(12,2) values
+		$inserts = array('1337133713.37', '1234567890');
+		$expects = array('1337133713.37', '1234567890.00');
+
+		for ($i = 0; $i < count($inserts); $i++) {
+			$insert = $inserts[$i];
+			$expect = $expects[$i];
+
+			$query = OC_DB::prepare('INSERT INTO `' . $table . '` (`' . $rowname . '`) VALUES (?)');
+			$result = $query->execute(array($insert));
+			$this->assertEquals(1, $result);
+			$query = OC_DB::prepare('SELECT `' . $rowname . '` FROM `' . $table . '`');
+			$result = $query->execute();
+			$this->assertTrue((bool)$result);
+			$row = $result->fetchRow();
+			$this->assertArrayHasKey($rowname, $row);
+			$this->assertEquals($expect, $row[$rowname]);
+			$query = OC_DB::prepare('DELETE FROM `' . $table . '`');
+			$result = $query->execute();
+			$this->assertTrue((bool)$result);
+		}
+	}
+
+	public function testUpdateAffectedRowsNoMatch() {
+		$this->insertCardData('fullname1', 'uri1');
+		// The WHERE clause does not match any rows
+		$this->assertSame(0, $this->updateCardData('fullname3', 'uri2'));
+	}
+
+	public function testUpdateAffectedRowsDifferent() {
+		$this->insertCardData('fullname1', 'uri1');
+		// The WHERE clause matches a single row and the value we are updating
+		// is different from the one already present.
+		$this->assertSame(1, $this->updateCardData('fullname1', 'uri2'));
+	}
+
+	public function testUpdateAffectedRowsSame() {
+		$this->insertCardData('fullname1', 'uri1');
+		// The WHERE clause matches a single row and the value we are updating
+		// to is the same as the one already present. MySQL reports 0 here when
+		// the PDO::MYSQL_ATTR_FOUND_ROWS flag is not specified.
+		$this->assertSame(1, $this->updateCardData('fullname1', 'uri1'));
+	}
+
+	public function testUpdateAffectedRowsMultiple() {
+		$this->insertCardData('fullname1', 'uri1');
+		$this->insertCardData('fullname2', 'uri2');
+		// The WHERE clause matches two rows. One row contains a value that
+		// needs to be updated, the other one already contains the value we are
+		// updating to. MySQL reports 1 here when the PDO::MYSQL_ATTR_FOUND_ROWS
+		// flag is not specified.
+		$query = OC_DB::prepare("UPDATE `*PREFIX*{$this->table2}` SET `uri` = ?");
+		$this->assertSame(2, $query->execute(array('uri1')));
+	}
+
+	protected function insertCardData($fullname, $uri) {
+		$query = OC_DB::prepare("INSERT INTO `*PREFIX*{$this->table2}` (`fullname`, `uri`, `carddata`) VALUES (?, ?, ?)");
+		$this->assertSame(1, $query->execute(array($fullname, $uri, uniqid())));
+	}
+
+	protected function updateCardData($fullname, $uri) {
+		$query = OC_DB::prepare("UPDATE `*PREFIX*{$this->table2}` SET `uri` = ? WHERE `fullname` = ?");
+		return $query->execute(array($uri, $fullname));
+	}
+
+	public function testILIKE() {
+		$table = "*PREFIX*{$this->table2}";
+
+		$query = OC_DB::prepare("INSERT INTO `$table` (`fullname`, `uri`, `carddata`) VALUES (?, ?, ?)");
+		$query->execute(array('fooBAR', 'foo', 'bar'));
+
+		$query = OC_DB::prepare("SELECT * FROM `$table` WHERE `fullname` LIKE ?");
+		$result = $query->execute(array('foobar'));
+		$this->assertCount(0, $result->fetchAll());
+
+		$query = OC_DB::prepare("SELECT * FROM `$table` WHERE `fullname` ILIKE ?");
+		$result = $query->execute(array('foobar'));
+		$this->assertCount(1, $result->fetchAll());
+
+		$query = OC_DB::prepare("SELECT * FROM `$table` WHERE `fullname` ILIKE ?");
+		$result = $query->execute(array('foo'));
+		$this->assertCount(0, $result->fetchAll());
+	}
+
+	public function testILIKEWildcard() {
+		$table = "*PREFIX*{$this->table2}";
+
+		$query = OC_DB::prepare("INSERT INTO `$table` (`fullname`, `uri`, `carddata`) VALUES (?, ?, ?)");
+		$query->execute(array('FooBAR', 'foo', 'bar'));
+
+		$query = OC_DB::prepare("SELECT * FROM `$table` WHERE `fullname` LIKE ?");
+		$result = $query->execute(array('%bar'));
+		$this->assertCount(0, $result->fetchAll());
+
+		$query = OC_DB::prepare("SELECT * FROM `$table` WHERE `fullname` LIKE ?");
+		$result = $query->execute(array('foo%'));
+		$this->assertCount(0, $result->fetchAll());
+
+		$query = OC_DB::prepare("SELECT * FROM `$table` WHERE `fullname` LIKE ?");
+		$result = $query->execute(array('%ba%'));
+		$this->assertCount(0, $result->fetchAll());
+
+		$query = OC_DB::prepare("SELECT * FROM `$table` WHERE `fullname` ILIKE ?");
+		$result = $query->execute(array('%bar'));
+		$this->assertCount(1, $result->fetchAll());
+
+		$query = OC_DB::prepare("SELECT * FROM `$table` WHERE `fullname` ILIKE ?");
+		$result = $query->execute(array('foo%'));
+		$this->assertCount(1, $result->fetchAll());
+
+		$query = OC_DB::prepare("SELECT * FROM `$table` WHERE `fullname` ILIKE ?");
+		$result = $query->execute(array('%ba%'));
+		$this->assertCount(1, $result->fetchAll());
 	}
 
 	public function testDecimal() {

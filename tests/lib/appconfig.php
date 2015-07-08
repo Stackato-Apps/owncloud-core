@@ -1,6 +1,7 @@
 <?php
 /**
  * Copyright (c) 2013 Christopher Schäpers <christopher@schaepers.it>
+ * Copyright (c) 2013 Bart Visscher <bartv@thisnet.nl>
  * This file is licensed under the Affero General Public License version 3 or
  * later.
  * See the COPYING-README file.
@@ -35,12 +36,13 @@ class Test_Appconfig extends PHPUnit_Framework_TestCase {
 	}
 
 	public function testGetApps() {
-		$query = \OC_DB::prepare('SELECT DISTINCT `appid` FROM `*PREFIX*appconfig`');
+		$query = \OC_DB::prepare('SELECT DISTINCT `appid` FROM `*PREFIX*appconfig` ORDER BY `appid`');
 		$result = $query->execute();
 		$expected = array();
 		while ($row = $result->fetchRow()) {
 			$expected[] = $row['appid'];
 		}
+		sort($expected);
 		$apps = \OC_Appconfig::getApps();
 		$this->assertEquals($expected, $apps);
 	}
@@ -52,6 +54,7 @@ class Test_Appconfig extends PHPUnit_Framework_TestCase {
 		while($row = $result->fetchRow()) {
 			$expected[] = $row["configkey"];
 		}
+		sort($expected);
 		$keys = \OC_Appconfig::getKeys('testapp');
 		$this->assertEquals($expected, $keys);
 	}
@@ -90,6 +93,72 @@ class Test_Appconfig extends PHPUnit_Framework_TestCase {
 		$result = $query->execute(array('someapp', 'somekey'));
 		$value = $result->fetchRow();
 		$this->assertEquals('somevalue', $value['configvalue']);
+	}
+
+	public function testSetValueUnchanged() {
+		$statementMock = $this->getMock('\Doctrine\DBAL\Statement', array(), array(), '', false);
+		$statementMock->expects($this->once())
+			->method('fetch')
+			->will($this->returnValue(false));
+
+		$connectionMock = $this->getMock('\OC\DB\Connection', array(), array(), '', false);
+		$connectionMock->expects($this->once())
+			->method('executeQuery')
+			->with($this->equalTo('SELECT `configvalue`, `configkey` FROM `*PREFIX*appconfig`'
+				.' WHERE `appid` = ?'), $this->equalTo(array('bar')))
+			->will($this->returnValue($statementMock));
+		$connectionMock->expects($this->once())
+			->method('insert')
+			->with($this->equalTo('*PREFIX*appconfig'),
+				$this->equalTo(
+					array(
+						'appid' => 'bar',
+						'configkey' => 'foo',
+						'configvalue' => 'v1',
+					)
+				));
+		$connectionMock->expects($this->never())
+			->method('update');
+
+		$appconfig = new OC\AppConfig($connectionMock);
+		$appconfig->setValue('bar', 'foo', 'v1');
+		$appconfig->setValue('bar', 'foo', 'v1');
+		$appconfig->setValue('bar', 'foo', 'v1');
+	}
+
+	public function testSetValueUnchanged2() {
+		$statementMock = $this->getMock('\Doctrine\DBAL\Statement', array(), array(), '', false);
+		$statementMock->expects($this->once())
+			->method('fetch')
+			->will($this->returnValue(false));
+
+		$connectionMock = $this->getMock('\OC\DB\Connection', array(), array(), '', false);
+		$connectionMock->expects($this->once())
+			->method('executeQuery')
+			->with($this->equalTo('SELECT `configvalue`, `configkey` FROM `*PREFIX*appconfig`'
+				.' WHERE `appid` = ?'), $this->equalTo(array('bar')))
+			->will($this->returnValue($statementMock));
+		$connectionMock->expects($this->once())
+			->method('insert')
+			->with($this->equalTo('*PREFIX*appconfig'),
+				$this->equalTo(
+					array(
+						'appid' => 'bar',
+						'configkey' => 'foo',
+						'configvalue' => 'v1',
+					)
+				));
+		$connectionMock->expects($this->once())
+			->method('update')
+			->with($this->equalTo('*PREFIX*appconfig'),
+				$this->equalTo(array('configvalue' => 'v2')),
+				$this->equalTo(array('appid' => 'bar', 'configkey' => 'foo'))
+				);
+
+		$appconfig = new OC\AppConfig($connectionMock);
+		$appconfig->setValue('bar', 'foo', 'v1');
+		$appconfig->setValue('bar', 'foo', 'v2');
+		$appconfig->setValue('bar', 'foo', 'v2');
 	}
 
 	public function testDeleteKey() {

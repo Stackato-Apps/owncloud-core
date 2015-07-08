@@ -12,8 +12,6 @@
  * A class to handle mail sending.
  */
 
-require_once 'class.phpmailer.php';
-
 class OC_Mail {
 
 	/**
@@ -25,15 +23,16 @@ class OC_Mail {
 	 * @param string $mailtext
 	 * @param string $fromaddress
 	 * @param string $fromname
-	 * @param bool|int $html
+	 * @param integer $html
 	 * @param string $altbody
 	 * @param string $ccaddress
 	 * @param string $ccname
 	 * @param string $bcc
+	 * @param string $replyTo
 	 * @throws Exception
 	 */
 	public static function send($toaddress, $toname, $subject, $mailtext, $fromaddress, $fromname,
-		$html=0, $altbody='', $ccaddress='', $ccname='', $bcc='') {
+		$html=0, $altbody='', $ccaddress='', $ccname='', $bcc='', $replyTo='') {
 
 		$SMTPMODE = OC_Config::getValue( 'mail_smtpmode', 'sendmail' );
 		$SMTPHOST = OC_Config::getValue( 'mail_smtphost', '127.0.0.1' );
@@ -63,6 +62,7 @@ class OC_Mail {
 		$mailo->Port = $SMTPPORT;
 		$mailo->SMTPAuth = $SMTPAUTH;
 		$mailo->SMTPDebug = $SMTPDEBUG;
+		$mailo->Debugoutput = 'error_log';
 		$mailo->SMTPSecure = $SMTPSECURE;
 		$mailo->AuthType = $SMTPAUTHTYPE;
 		$mailo->Username = $SMTPUSERNAME;
@@ -73,12 +73,15 @@ class OC_Mail {
 		$mailo->FromName = $fromname;;
 		$mailo->Sender = $fromaddress;
 		try {
+			$toaddress = self::buildAsciiEmail($toaddress);
 			$mailo->AddAddress($toaddress, $toname);
 
 			if($ccaddress<>'') $mailo->AddCC($ccaddress, $ccname);
 			if($bcc<>'') $mailo->AddBCC($bcc);
 
-			$mailo->AddReplyTo($fromaddress, $fromname);
+			if($replyTo !== '') {
+				$mailo->addReplyTo($replyTo);
+			}
 
 			$mailo->WordWrap = 50;
 			if($html==1) $mailo->IsHTML(true); else $mailo->IsHTML(false);
@@ -124,7 +127,29 @@ class OC_Mail {
 	 * @param string $emailAddress a given email address to be validated
 	 * @return bool
 	 */
-	public static function ValidateAddress($emailAddress) {
+	public static function validateAddress($emailAddress) {
+		if (strpos($emailAddress, '@') === false) {
+			return false;
+		}
+		$emailAddress = self::buildAsciiEmail($emailAddress);
 		return PHPMailer::ValidateAddress($emailAddress);
 	}
+
+	/**
+	 * IDN domains will be properly converted to ascii domains.
+	 *
+	 * @param string $emailAddress
+	 * @return string
+	 */
+	public static function buildAsciiEmail($emailAddress) {
+		if (!function_exists('idn_to_ascii')) {
+			return $emailAddress;
+		}
+
+		list($name, $domain) = explode('@', $emailAddress, 2);
+		$domain = idn_to_ascii($domain);
+
+		return "$name@$domain";
+	}
+
 }

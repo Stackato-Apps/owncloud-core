@@ -32,9 +32,6 @@ class Scanner extends \PHPUnit_Framework_TestCase {
 
 	function tearDown() {
 		if ($this->cache) {
-			$ids = $this->cache->getAll();
-			$permissionsCache = $this->storage->getPermissionsCache();
-			$permissionsCache->removeMultiple($ids, \OC_User::getUser());
 			$this->cache->clear();
 		}
 	}
@@ -150,13 +147,15 @@ class Scanner extends \PHPUnit_Framework_TestCase {
 		$this->cache->put('folder', array('mtime' => $this->storage->filemtime('folder'), 'storage_mtime' => $this->storage->filemtime('folder')));
 		$this->scanner->scan('', \OC\Files\Cache\Scanner::SCAN_SHALLOW, \OC\Files\Cache\Scanner::REUSE_SIZE);
 		$newData = $this->cache->get('');
-		$this->assertNotEquals($oldData['etag'], $newData['etag']);
+		$this->assertInternalType('string', $oldData['etag']);
+		$this->assertInternalType('string', $newData['etag']);
+		$this->assertNotSame($oldData['etag'], $newData['etag']);
 		$this->assertEquals($oldData['size'], $newData['size']);
 
 		$oldData = $newData;
 		$this->scanner->scan('', \OC\Files\Cache\Scanner::SCAN_SHALLOW, \OC\Files\Cache\Scanner::REUSE_ETAG);
 		$newData = $this->cache->get('');
-		$this->assertEquals($oldData['etag'], $newData['etag']);
+		$this->assertSame($oldData['etag'], $newData['etag']);
 		$this->assertEquals(-1, $newData['size']);
 
 		$this->scanner->scan('', \OC\Files\Cache\Scanner::SCAN_RECURSIVE);
@@ -164,17 +163,17 @@ class Scanner extends \PHPUnit_Framework_TestCase {
 		$this->assertNotEquals(-1, $oldData['size']);
 		$this->scanner->scanFile('', \OC\Files\Cache\Scanner::REUSE_ETAG + \OC\Files\Cache\Scanner::REUSE_SIZE);
 		$newData = $this->cache->get('');
-		$this->assertEquals($oldData['etag'], $newData['etag']);
+		$this->assertSame($oldData['etag'], $newData['etag']);
 		$this->assertEquals($oldData['size'], $newData['size']);
 
 		$this->scanner->scan('', \OC\Files\Cache\Scanner::SCAN_RECURSIVE, \OC\Files\Cache\Scanner::REUSE_ETAG + \OC\Files\Cache\Scanner::REUSE_SIZE);
 		$newData = $this->cache->get('');
-		$this->assertEquals($oldData['etag'], $newData['etag']);
+		$this->assertSame($oldData['etag'], $newData['etag']);
 		$this->assertEquals($oldData['size'], $newData['size']);
 
 		$this->scanner->scan('', \OC\Files\Cache\Scanner::SCAN_SHALLOW, \OC\Files\Cache\Scanner::REUSE_ETAG + \OC\Files\Cache\Scanner::REUSE_SIZE);
 		$newData = $this->cache->get('');
-		$this->assertEquals($oldData['etag'], $newData['etag']);
+		$this->assertSame($oldData['etag'], $newData['etag']);
 		$this->assertEquals($oldData['size'], $newData['size']);
 	}
 
@@ -193,13 +192,13 @@ class Scanner extends \PHPUnit_Framework_TestCase {
 
 		$this->scanner->scan('');
 		$this->assertTrue($this->cache->inCache('folder/bar.txt'));
-		$this->storage->unlink('/folder');
+		$this->storage->rmdir('/folder');
 		$this->scanner->scan('', \OC\Files\Cache\Scanner::SCAN_SHALLOW);
 		$this->assertFalse($this->cache->inCache('folder'));
 		$this->assertFalse($this->cache->inCache('folder/bar.txt'));
 	}
 
-	public function testScanRemovedFile(){
+	public function testScanRemovedFile() {
 		$this->fillTestFolders();
 
 		$this->scanner->scan('');
@@ -217,8 +216,11 @@ class Scanner extends \PHPUnit_Framework_TestCase {
 		// manipulate etag to simulate an empty etag
 		$this->scanner->scan('', \OC\Files\Cache\Scanner::SCAN_SHALLOW, \OC\Files\Cache\Scanner::REUSE_ETAG);
 		$data0 = $this->cache->get('folder/bar.txt');
+		$this->assertInternalType('string', $data0['etag']);
 		$data1 = $this->cache->get('folder');
+		$this->assertInternalType('string', $data1['etag']);
 		$data2 = $this->cache->get('');
+		$this->assertInternalType('string', $data2['etag']);
 		$data0['etag'] = '';
 		$this->cache->put('folder/bar.txt', $data0);
 
@@ -227,10 +229,55 @@ class Scanner extends \PHPUnit_Framework_TestCase {
 
 		// verify cache content
 		$newData0 = $this->cache->get('folder/bar.txt');
-		$newData1 = $this->cache->get('folder');
-		$newData2 = $this->cache->get('');
+		$this->assertInternalType('string', $newData0['etag']);
 		$this->assertNotEmpty($newData0['etag']);
-		$this->assertNotEquals($data1['etag'], $newData1['etag']);
-		$this->assertNotEquals($data2['etag'], $newData2['etag']);
+	}
+
+	public function testRepairParent() {
+		$this->fillTestFolders();
+		$this->scanner->scan('');
+		$this->assertTrue($this->cache->inCache('folder/bar.txt'));
+		$oldFolderId = $this->cache->getId('folder');
+
+		// delete the folder without removing the childs
+		$sql = 'DELETE FROM `*PREFIX*filecache` WHERE `fileid` = ?';
+		\OC_DB::executeAudited($sql, array($oldFolderId));
+
+		$cachedData = $this->cache->get('folder/bar.txt');
+		$this->assertEquals($oldFolderId, $cachedData['parent']);
+		$this->assertFalse($this->cache->inCache('folder'));
+
+		$this->scanner->scan('');
+
+		$this->assertTrue($this->cache->inCache('folder'));
+		$newFolderId = $this->cache->getId('folder');
+		$this->assertNotEquals($oldFolderId, $newFolderId);
+
+		$cachedData = $this->cache->get('folder/bar.txt');
+		$this->assertEquals($newFolderId, $cachedData['parent']);
+	}
+
+	public function testRepairParentShallow() {
+		$this->fillTestFolders();
+		$this->scanner->scan('');
+		$this->assertTrue($this->cache->inCache('folder/bar.txt'));
+		$oldFolderId = $this->cache->getId('folder');
+
+		// delete the folder without removing the childs
+		$sql = 'DELETE FROM `*PREFIX*filecache` WHERE `fileid` = ?';
+		\OC_DB::executeAudited($sql, array($oldFolderId));
+
+		$cachedData = $this->cache->get('folder/bar.txt');
+		$this->assertEquals($oldFolderId, $cachedData['parent']);
+		$this->assertFalse($this->cache->inCache('folder'));
+
+		$this->scanner->scan('folder', \OC\Files\Cache\Scanner::SCAN_SHALLOW);
+
+		$this->assertTrue($this->cache->inCache('folder'));
+		$newFolderId = $this->cache->getId('folder');
+		$this->assertNotEquals($oldFolderId, $newFolderId);
+
+		$cachedData = $this->cache->get('folder/bar.txt');
+		$this->assertEquals($newFolderId, $cachedData['parent']);
 	}
 }

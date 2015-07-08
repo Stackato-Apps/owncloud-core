@@ -29,13 +29,12 @@ if (!\OC_Util::runningOnWindows()) {
 
 			$tmpDir = get_temp_dir();
 
-			$defaultParameters = ' --headless --nologo --nofirststartwizard --invisible --norestore -convert-to pdf -outdir ';
+			$defaultParameters = ' -env:UserInstallation=file://' . escapeshellarg($tmpDir . '/owncloud-' . \OC_Util::getInstanceId().'/') . ' --headless --nologo --nofirststartwizard --invisible --norestore --convert-to pdf --outdir ';
 			$clParameters = \OCP\Config::getSystemValue('preview_office_cl_parameters', $defaultParameters);
 
 			$exec = $this->cmd . $clParameters . escapeshellarg($tmpDir) . ' ' . escapeshellarg($absPath);
-			$export = 'export HOME=/' . $tmpDir;
 
-			shell_exec($export . "\n" . $exec);
+			shell_exec($exec);
 
 			//create imagick object from pdf
 			try{
@@ -64,12 +63,12 @@ if (!\OC_Util::runningOnWindows()) {
 				$cmd = \OC_Config::getValue('preview_libreoffice_path', null);
 			}
 
-			$whichLibreOffice = shell_exec('which libreoffice');
+			$whichLibreOffice = shell_exec('command -v libreoffice');
 			if($cmd === '' && !empty($whichLibreOffice)) {
 				$cmd = 'libreoffice';
 			}
 
-			$whichOpenOffice = shell_exec('which openoffice');
+			$whichOpenOffice = shell_exec('command -v openoffice');
 			if($cmd === '' && !empty($whichOpenOffice)) {
 				$cmd = 'openoffice';
 			}

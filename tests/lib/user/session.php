@@ -10,6 +10,17 @@
 namespace Test\User;
 
 class Session extends \PHPUnit_Framework_TestCase {
+
+	private $session;
+
+	public function setUp () {
+		$this->session = \OC::$session;
+	}
+
+	public function tearDown() {
+		\OC::$session = $this->session;
+	}
+
 	public function testGetUser() {
 		$session = $this->getMock('\OC\Session\Memory', array(), array(''));
 		$session->expects($this->once())
@@ -26,6 +37,8 @@ class Session extends \PHPUnit_Framework_TestCase {
 		$manager = new \OC\User\Manager();
 		$manager->registerBackend($backend);
 
+		//also set the \OC::$session or the \OC\User\Session will use it
+		\OC::$session = $session;
 		$userSession = new \OC\User\Session($manager, $session);
 		$user = $userSession->getUser();
 		$this->assertEquals('foo', $user->getUID());
@@ -46,6 +59,8 @@ class Session extends \PHPUnit_Framework_TestCase {
 			->method('getUID')
 			->will($this->returnValue('foo'));
 
+		//also set the \OC::$session or the \OC\User\Session will use it
+		\OC::$session = $session;
 		$userSession = new \OC\User\Session($manager, $session);
 		$userSession->setUser($user);
 	}
@@ -67,7 +82,17 @@ class Session extends \PHPUnit_Framework_TestCase {
 					},
 					'foo'));
 
-		$manager = $this->getMock('\OC\User\Manager');
+		$managerMethods = get_class_methods('\OC\User\Manager');
+		//keep following methods intact in order to ensure hooks are
+		//working
+		$doNotMock = array('__construct', 'emit', 'listen');
+		foreach($doNotMock as $methodName) {
+			$i = array_search($methodName, $managerMethods, true);
+			if($i !== false) {
+				unset($managerMethods[$i]);
+			}
+		}
+		$manager = $this->getMock('\OC\User\Manager', $managerMethods, array());
 
 		$backend = $this->getMock('OC_User_Dummy');
 
@@ -78,12 +103,16 @@ class Session extends \PHPUnit_Framework_TestCase {
 		$user->expects($this->any())
 			->method('getUID')
 			->will($this->returnValue('foo'));
+		$user->expects($this->once())
+			->method('updateLastLoginTimestamp');
 
 		$manager->expects($this->once())
 			->method('checkPassword')
 			->with('foo', 'bar')
 			->will($this->returnValue($user));
 
+		//also set the \OC::$session or the \OC\User\Session will use it
+		\OC::$session = $session;
 		$userSession = new \OC\User\Session($manager, $session);
 		$userSession->login('foo', 'bar');
 		$this->assertEquals($user, $userSession->getUser());
@@ -94,7 +123,17 @@ class Session extends \PHPUnit_Framework_TestCase {
 		$session->expects($this->never())
 			->method('set');
 
-		$manager = $this->getMock('\OC\User\Manager');
+		$managerMethods = get_class_methods('\OC\User\Manager');
+		//keep following methods intact in order to ensure hooks are
+		//working
+		$doNotMock = array('__construct', 'emit', 'listen');
+		foreach($doNotMock as $methodName) {
+			$i = array_search($methodName, $managerMethods, true);
+			if($i !== false) {
+				unset($managerMethods[$i]);
+			}
+		}
+		$manager = $this->getMock('\OC\User\Manager', $managerMethods, array());
 
 		$backend = $this->getMock('OC_User_Dummy');
 
@@ -102,12 +141,16 @@ class Session extends \PHPUnit_Framework_TestCase {
 		$user->expects($this->once())
 			->method('isEnabled')
 			->will($this->returnValue(false));
+		$user->expects($this->never())
+			->method('updateLastLoginTimestamp');
 
 		$manager->expects($this->once())
 			->method('checkPassword')
 			->with('foo', 'bar')
 			->will($this->returnValue($user));
 
+		//also set the \OC::$session or the \OC\User\Session will use it
+		\OC::$session = $session;
 		$userSession = new \OC\User\Session($manager, $session);
 		$userSession->login('foo', 'bar');
 	}
@@ -117,19 +160,33 @@ class Session extends \PHPUnit_Framework_TestCase {
 		$session->expects($this->never())
 			->method('set');
 
-		$manager = $this->getMock('\OC\User\Manager');
+		$managerMethods = get_class_methods('\OC\User\Manager');
+		//keep following methods intact in order to ensure hooks are
+		//working
+		$doNotMock = array('__construct', 'emit', 'listen');
+		foreach($doNotMock as $methodName) {
+			$i = array_search($methodName, $managerMethods, true);
+			if($i !== false) {
+				unset($managerMethods[$i]);
+			}
+		}
+		$manager = $this->getMock('\OC\User\Manager', $managerMethods, array());
 
 		$backend = $this->getMock('OC_User_Dummy');
 
 		$user = $this->getMock('\OC\User\User', array(), array('foo', $backend));
 		$user->expects($this->never())
 			->method('isEnabled');
+		$user->expects($this->never())
+			->method('updateLastLoginTimestamp');
 
 		$manager->expects($this->once())
 			->method('checkPassword')
 			->with('foo', 'bar')
 			->will($this->returnValue(false));
 
+		//also set the \OC::$session or the \OC\User\Session will use it
+		\OC::$session = $session;
 		$userSession = new \OC\User\Session($manager, $session);
 		$userSession->login('foo', 'bar');
 	}
@@ -148,7 +205,155 @@ class Session extends \PHPUnit_Framework_TestCase {
 			->with('foo', 'bar')
 			->will($this->returnValue(false));
 
+		//also set the \OC::$session or the \OC\User\Session will use it
+		\OC::$session = $session;
 		$userSession = new \OC\User\Session($manager, $session);
 		$userSession->login('foo', 'bar');
+	}
+
+	public function testRememberLoginValidToken() {
+		$session = $this->getMock('\OC\Session\Memory', array(), array(''));
+		$session->expects($this->exactly(1))
+			->method('set')
+			->with($this->callback(function($key) {
+						switch($key) {
+							case 'user_id':
+								return true;
+							default:
+								return false;
+						}
+					},
+					'foo'));
+
+		$managerMethods = get_class_methods('\OC\User\Manager');
+		//keep following methods intact in order to ensure hooks are
+		//working
+		$doNotMock = array('__construct', 'emit', 'listen');
+		foreach($doNotMock as $methodName) {
+			$i = array_search($methodName, $managerMethods, true);
+			if($i !== false) {
+				unset($managerMethods[$i]);
+			}
+		}
+		$manager = $this->getMock('\OC\User\Manager', $managerMethods, array());
+
+		$backend = $this->getMock('OC_User_Dummy');
+
+		$user = $this->getMock('\OC\User\User', array(), array('foo', $backend));
+
+		$user->expects($this->any())
+			->method('getUID')
+			->will($this->returnValue('foo'));
+		$user->expects($this->once())
+			->method('updateLastLoginTimestamp');
+
+		$manager->expects($this->once())
+			->method('get')
+			->with('foo')
+			->will($this->returnValue($user));
+
+		//prepare login token
+		$token = 'goodToken';
+		\OC_Preferences::setValue('foo', 'login_token', $token, time());
+
+		//also set the \OC::$session or the \OC\User\Session will use it
+		\OC::$session = $session;
+		$userSession = $this->getMock(
+			'\OC\User\Session',
+			//override, otherwise tests will fail because of setcookie()
+			array('setMagicInCookie'),
+			//there  are passed as parameters to the constructor
+			array($manager, $session));
+
+		$granted = $userSession->loginWithCookie('foo', $token);
+
+		$this->assertSame($granted, true);
+	}
+
+	public function testRememberLoginInvalidToken() {
+		$session = $this->getMock('\OC\Session\Memory', array(), array(''));
+		$session->expects($this->never())
+			->method('set');
+
+		$managerMethods = get_class_methods('\OC\User\Manager');
+		//keep following methods intact in order to ensure hooks are
+		//working
+		$doNotMock = array('__construct', 'emit', 'listen');
+		foreach($doNotMock as $methodName) {
+			$i = array_search($methodName, $managerMethods, true);
+			if($i !== false) {
+				unset($managerMethods[$i]);
+			}
+		}
+		$manager = $this->getMock('\OC\User\Manager', $managerMethods, array());
+
+		$backend = $this->getMock('OC_User_Dummy');
+
+		$user = $this->getMock('\OC\User\User', array(), array('foo', $backend));
+
+		$user->expects($this->any())
+			->method('getUID')
+			->will($this->returnValue('foo'));
+		$user->expects($this->never())
+			->method('updateLastLoginTimestamp');
+
+		$manager->expects($this->once())
+			->method('get')
+			->with('foo')
+			->will($this->returnValue($user));
+
+		//prepare login token
+		$token = 'goodToken';
+		\OC_Preferences::setValue('foo', 'login_token', $token, time());
+
+		//also set the \OC::$session or the \OC\User\Session will use it
+		\OC::$session = $session;
+		$userSession = new \OC\User\Session($manager, $session);
+		$granted = $userSession->loginWithCookie('foo', 'badToken');
+
+		$this->assertSame($granted, false);
+	}
+
+	public function testRememberLoginInvalidUser() {
+		$session = $this->getMock('\OC\Session\Memory', array(), array(''));
+		$session->expects($this->never())
+			->method('set');
+
+		$managerMethods = get_class_methods('\OC\User\Manager');
+		//keep following methods intact in order to ensure hooks are
+		//working
+		$doNotMock = array('__construct', 'emit', 'listen');
+		foreach($doNotMock as $methodName) {
+			$i = array_search($methodName, $managerMethods, true);
+			if($i !== false) {
+				unset($managerMethods[$i]);
+			}
+		}
+		$manager = $this->getMock('\OC\User\Manager', $managerMethods, array());
+
+		$backend = $this->getMock('OC_User_Dummy');
+
+		$user = $this->getMock('\OC\User\User', array(), array('foo', $backend));
+
+		$user->expects($this->never())
+			->method('getUID');
+		$user->expects($this->never())
+			->method('updateLastLoginTimestamp');
+
+		$manager->expects($this->once())
+			->method('get')
+			->with('foo')
+			->will($this->returnValue(null));
+
+		//prepare login token
+		$token = 'goodToken';
+		\OC_Preferences::setValue('foo', 'login_token', $token, time());
+
+		//also set the \OC::$session or the \OC\User\Session will use it
+		\OC::$session = $session;
+		$userSession = new \OC\User\Session($manager, $session);
+		$granted = $userSession->loginWithCookie('foo', $token);
+
+		$this->assertSame($granted, false);
 	}
 }

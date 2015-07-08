@@ -11,7 +11,7 @@ namespace OC\Preview;
 class Image extends Provider {
 
 	public function getMimeType() {
-		return '/image\/.*/';
+		return '/image\/(?!tiff$)(?!svg.*).*/';
 	}
 
 	public function getThumbnail($path, $maxX, $maxY, $scalingup, $fileview) {
@@ -21,16 +21,25 @@ class Image extends Provider {
 			return false;
 		}
 
-		$image = new \OC_Image();
-		//check if file is encrypted
-		if($fileInfo['encrypted'] === true) {
-			$image->loadFromData(stream_get_contents($fileview->fopen($path, 'r')));
-		}else{
-			$image->loadFromFile($fileview->getLocalFile($path));
+		$maxSizeForImages = \OC::$server->getConfig()->getSystemValue('preview_max_filesize_image', 50);
+		$size = $fileInfo->getSize();
+
+		if ($maxSizeForImages !== -1 && $size > ($maxSizeForImages * 1024 * 1024)) {
+			return false;
 		}
+
+		$image = new \OC_Image();
+
+		if($fileInfo['encrypted'] === true) {
+			$fileName = $fileview->toTmpFile($path);
+		} else {
+			$fileName = $fileview->getLocalFile($path);
+		}
+		$image->loadFromFile($fileName);
 
 		return $image->valid() ? $image : false;
 	}
+
 }
 
 \OC\Preview::registerProvider('OC\Preview\Image');

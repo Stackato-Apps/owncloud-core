@@ -37,12 +37,12 @@ if(!\OC\Files\Filesystem::file_exists($filename)) {
 	exit;
 }
 
-$ftype=\OC\Files\Filesystem::getMimeType( $filename );
+$ftype=\OC_Helper::getSecureMimeType(\OC\Files\Filesystem::getMimeType( $filename ));
 
 header('Content-Type:'.$ftype);
 OCP\Response::setContentDispositionHeader(basename($filename), 'attachment');
 OCP\Response::disableCaching();
-header('Content-Length: '.\OC\Files\Filesystem::filesize($filename));
+OCP\Response::setContentLengthHeader(\OC\Files\Filesystem::filesize($filename));
 
 OC_Util::obEnd();
 \OC\Files\Filesystem::readfile( $filename );

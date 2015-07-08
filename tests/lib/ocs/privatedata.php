@@ -79,6 +79,31 @@ class Test_OC_OCS_Privatedata extends PHPUnit_Framework_TestCase
 		$this->assertEquals('updated', $data['value']);
 	}
 
+	public function testSetSameValue() {
+		$_POST = array('value' => 123456789);
+		$params = array('app' => $this->appKey, 'key' => 'k-10');
+		$result = OC_OCS_Privatedata::set($params);
+		$this->assertEquals(100, $result->getStatusCode());
+
+		$result = OC_OCS_Privatedata::get($params);
+		$this->assertOcsResult(1, $result);
+		$data = $result->getData();
+		$data = $data[0];
+		$this->assertEquals('123456789', $data['value']);
+
+		// set the same value again
+		$_POST = array('value' => 123456789);
+		$params = array('app' => $this->appKey, 'key' => 'k-10');
+		$result = OC_OCS_Privatedata::set($params);
+		$this->assertEquals(100, $result->getStatusCode());
+
+		$result = OC_OCS_Privatedata::get($params);
+		$this->assertOcsResult(1, $result);
+		$data = $result->getData();
+		$data = $data[0];
+		$this->assertEquals('123456789', $data['value']);
+	}
+
 	public function testSetMany() {
 		$_POST = array('value' => 123456789);
 
@@ -131,6 +156,7 @@ class Test_OC_OCS_Privatedata extends PHPUnit_Framework_TestCase
 
 	/**
 	 * @param \OC_OCS_Result $result
+	 * @param integer $expectedArraySize
 	 */
 	public function assertOcsResult($expectedArraySize, $result) {
 		$this->assertEquals(100, $result->getStatusCode());

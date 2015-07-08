@@ -48,6 +48,7 @@ class Test_Request extends PHPUnit_Framework_TestCase {
 			array('/core/ajax/translations.php', '/core/ajax/translations.php', 'index.php'),
 			array('/core/ajax/translations.php', '//core/ajax/translations.php', '/index.php'),
 			array('/core/ajax/translations.php', '/oc/core/ajax/translations.php', '/oc/index.php'),
+			array('/core/ajax/translations.php', '/oc//index.php/core/ajax/translations.php', '/oc/index.php'),
 			array('/1', '/oc/core/1', '/oc/core/index.php'),
 		);
 	}
@@ -118,6 +119,21 @@ class Test_Request extends PHPUnit_Framework_TestCase {
 				),
 				true
 			),
+			array(
+				'Mozilla/5.0 (X11; Linux i686; rv:24.0) Gecko/20100101 Firefox/24.0',
+				OC_Request::USER_AGENT_FREEBOX,
+				false
+			),
+			array(
+				'Mozilla/5.0',
+				OC_Request::USER_AGENT_FREEBOX,
+				true
+			),
+			array(
+				'Fake Mozilla/5.0',
+				OC_Request::USER_AGENT_FREEBOX,
+				false
+			),
 		);
 	}
 
@@ -177,6 +193,23 @@ class Test_Request extends PHPUnit_Framework_TestCase {
 		OC_Config::deleteKey('overwritehost');
 	}
 
+	public function hostWithPortProvider() {
+		return array(
+			array('localhost:500', 'localhost'),
+			array('foo.com', 'foo.com'),
+			array('[1fff:0:a88:85a3::ac1f]:801', '[1fff:0:a88:85a3::ac1f]'),
+			array('[1fff:0:a88:85a3::ac1f]', '[1fff:0:a88:85a3::ac1f]')
+		);
+	}
+
+	/**
+	 * @dataProvider hostWithPortProvider
+	 */
+	public function testGetDomainWithoutPort($hostWithPort, $host) {
+		$this->assertEquals($host, OC_Request::getDomainWithoutPort($hostWithPort));
+
+	}
+
 	/**
 	 * @dataProvider trustedDomainDataProvider
 	 */
@@ -193,7 +226,7 @@ class Test_Request extends PHPUnit_Framework_TestCase {
 	}
 
 	public function trustedDomainDataProvider() {
-		$trustedHostTestList = array('host.one.test:8080', 'host.two.test:8080');
+		$trustedHostTestList = array('host.one.test', 'host.two.test', '[1fff:0:a88:85a3::ac1f]');
 		return array(
 			// empty defaults to true
 			array(null, 'host.one.test:8080', true),
@@ -202,8 +235,12 @@ class Test_Request extends PHPUnit_Framework_TestCase {
 
 			// trust list when defined
 			array($trustedHostTestList, 'host.two.test:8080', true),
-			array($trustedHostTestList, 'host.two.test:9999', false),
+			array($trustedHostTestList, 'host.two.test:9999', true),
 			array($trustedHostTestList, 'host.three.test:8080', false),
+			array($trustedHostTestList, 'host.two.test:8080:aa:222', false),
+			array($trustedHostTestList, '[1fff:0:a88:85a3::ac1f]', true),
+			array($trustedHostTestList, '[1fff:0:a88:85a3::ac1f]:801', true),
+			array($trustedHostTestList, '[1fff:0:a88:85a3::ac1f]:801:34', false),
 
 			// trust localhost regardless of trust list
 			array($trustedHostTestList, 'localhost', true),

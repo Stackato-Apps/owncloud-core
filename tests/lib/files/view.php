@@ -7,6 +7,9 @@
 
 namespace Test\Files;
 
+use OC\Files\Cache\Watcher;
+use OC\Files\Storage\Temporary;
+
 class TemporaryNoTouch extends \OC\Files\Storage\Temporary {
 	public function touch($path, $mtime = null) {
 		return false;
@@ -18,8 +21,17 @@ class View extends \PHPUnit_Framework_TestCase {
 	 * @var \OC\Files\Storage\Storage[] $storages
 	 */
 	private $storages = array();
+	private $user;
 
-	public function setUp() {
+	/** @var \OC\Files\Storage\Storage */
+	private $tempStorage;
+
+	/** @var \OC\Files\Storage\Storage */
+	private $originalStorage;
+
+	protected function setUp() {
+		parent::setUp();
+
 		\OC_User::clearBackends();
 		\OC_User::useBackend(new \OC_User_Dummy());
 
@@ -28,18 +40,28 @@ class View extends \PHPUnit_Framework_TestCase {
 		$this->user = \OC_User::getUser();
 		\OC_User::setUserId('test');
 
+		$this->originalStorage = \OC\Files\Filesystem::getStorage('/');
 		\OC\Files\Filesystem::clearMounts();
+
+		$this->tempStorage = null;
 	}
 
-	public function tearDown() {
+	protected function tearDown() {
 		\OC_User::setUserId($this->user);
 		foreach ($this->storages as $storage) {
 			$cache = $storage->getCache();
 			$ids = $cache->getAll();
-			$permissionsCache = $storage->getPermissionsCache();
-			$permissionsCache->removeMultiple($ids, \OC_User::getUser());
 			$cache->clear();
 		}
+
+		if ($this->tempStorage && !\OC_Util::runningOnWindows()) {
+			system('rm -rf ' . escapeshellarg($this->tempStorage->getDataDir()));
+		}
+
+		\OC\Files\Filesystem::clearMounts();
+		\OC\Files\Filesystem::mount($this->originalStorage, array(), '/');
+
+		parent::tearDown();
 	}
 
 	/**
@@ -49,14 +71,18 @@ class View extends \PHPUnit_Framework_TestCase {
 		$storage1 = $this->getTestStorage();
 		$storage2 = $this->getTestStorage();
 		$storage3 = $this->getTestStorage();
-		\OC\Files\Filesystem::mount($storage1, array(), '/');
-		\OC\Files\Filesystem::mount($storage2, array(), '/substorage');
-		\OC\Files\Filesystem::mount($storage3, array(), '/folder/anotherstorage');
+		$root = '/' . uniqid();
+		\OC\Files\Filesystem::mount($storage1, array(), $root . '/');
+		\OC\Files\Filesystem::mount($storage2, array(), $root . '/substorage');
+		\OC\Files\Filesystem::mount($storage3, array(), $root . '/folder/anotherstorage');
 		$textSize = strlen("dummy file data\n");
 		$imageSize = filesize(\OC::$SERVERROOT . '/core/img/logo.png');
 		$storageSize = $textSize * 2 + $imageSize;
 
-		$rootView = new \OC\Files\View('');
+		$storageInfo = $storage3->getCache()->get('');
+		$this->assertEquals($storageSize, $storageInfo['size']);
+
+		$rootView = new \OC\Files\View($root);
 
 		$cachedData = $rootView->getFileInfo('/foo.txt');
 		$this->assertEquals($textSize, $cachedData['size']);
@@ -107,7 +133,7 @@ class View extends \PHPUnit_Framework_TestCase {
 		$this->assertEquals('foo.png', $folderData[1]['name']);
 		$this->assertEquals('foo.txt', $folderData[2]['name']);
 
-		$folderView = new \OC\Files\View('/folder');
+		$folderView = new \OC\Files\View($root . '/folder');
 		$this->assertEquals($rootView->getFileInfo('/folder'), $folderView->getFileInfo('/'));
 
 		$cachedData = $rootView->getFileInfo('/foo.txt');
@@ -249,6 +275,7 @@ class View extends \PHPUnit_Framework_TestCase {
 	function testWatcher() {
 		$storage1 = $this->getTestStorage();
 		\OC\Files\Filesystem::mount($storage1, array(), '/');
+		$storage1->getWatcher()->setPolicy(Watcher::CHECK_ALWAYS);
 
 		$rootView = new \OC\Files\View('');
 
@@ -368,7 +395,7 @@ class View extends \PHPUnit_Framework_TestCase {
 		$rootView->putFileInfo('foo.txt', array('storage_mtime' => 1000)); //make sure the watcher detects the change
 		$rootView->file_put_contents('foo.txt', 'asd');
 		$cachedData = $rootView->getFileInfo('foo.txt');
-		$this->assertGreaterThanOrEqual($cachedData['mtime'], $oldCachedData['mtime']);
+		$this->assertGreaterThanOrEqual($oldCachedData['mtime'], $cachedData['mtime']);
 		$this->assertEquals($cachedData['storage_mtime'], $cachedData['mtime']);
 	}
 
@@ -391,13 +418,12 @@ class View extends \PHPUnit_Framework_TestCase {
 		$this->assertNull($this->hookPath);
 
 		$subView->file_put_contents('/foo.txt', 'asd');
-		$this->assertNotNull($this->hookPath);
 		$this->assertEquals('/substorage/foo.txt', $this->hookPath);
 	}
 
 	private $hookPath;
 
-	function dummyHook($params) {
+	public function dummyHook($params) {
 		$this->hookPath = $params['path'];
 	}
 
@@ -439,12 +465,6 @@ class View extends \PHPUnit_Framework_TestCase {
 		return $storage;
 	}
 
-	private $createHookPath;
-
-	function dummyCreateHook($params) {
-		$this->createHookPath = $params['path'];
-	}
-
 	/**
 	 * @medium
 	 */
@@ -463,23 +483,50 @@ class View extends \PHPUnit_Framework_TestCase {
 		$this->assertNull($this->hookPath);
 	}
 
+	private $hookWritePath;
+	private $hookCreatePath;
+	private $hookUpdatePath;
+
+	public function dummyHookWrite($params) {
+		$this->hookWritePath = $params['path'];
+	}
+
+	public function dummyHookUpdate($params) {
+		$this->hookUpdatePath = $params['path'];
+	}
+
+	public function dummyHookCreate($params) {
+		$this->hookCreatePath = $params['path'];
+	}
+
 	public function testEditNoCreateHook() {
 		$storage1 = $this->getTestStorage();
 		$storage2 = $this->getTestStorage();
 		$defaultRoot = \OC\Files\Filesystem::getRoot();
 		\OC\Files\Filesystem::mount($storage1, array(), '/');
 		\OC\Files\Filesystem::mount($storage2, array(), $defaultRoot);
-		\OC_Hook::connect('OC_Filesystem', 'post_create', $this, 'dummyCreateHook');
+		\OC_Hook::connect('OC_Filesystem', 'post_create', $this, 'dummyHookCreate');
+		\OC_Hook::connect('OC_Filesystem', 'post_update', $this, 'dummyHookUpdate');
+		\OC_Hook::connect('OC_Filesystem', 'post_write', $this, 'dummyHookWrite');
 
 		$view = new \OC\Files\View($defaultRoot);
-		$this->hookPath = null;
+		$this->hookWritePath = $this->hookUpdatePath = $this->hookCreatePath = null;
 
 		$view->file_put_contents('/asd.txt', 'foo');
-		$this->assertEquals('/asd.txt', $this->createHookPath);
-		$this->createHookPath = null;
+		$this->assertEquals('/asd.txt', $this->hookCreatePath);
+		$this->assertNull($this->hookUpdatePath);
+		$this->assertEquals('/asd.txt', $this->hookWritePath);
+
+		$this->hookWritePath = $this->hookUpdatePath = $this->hookCreatePath = null;
 
 		$view->file_put_contents('/asd.txt', 'foo');
-		$this->assertNull($this->createHookPath);
+		$this->assertNull($this->hookCreatePath);
+		$this->assertEquals('/asd.txt', $this->hookUpdatePath);
+		$this->assertEquals('/asd.txt', $this->hookWritePath);
+
+		\OC_Hook::clear('OC_Filesystem', 'post_create');
+		\OC_Hook::clear('OC_Filesystem', 'post_update');
+		\OC_Hook::clear('OC_Filesystem', 'post_write');
 	}
 
 	/**
@@ -546,6 +593,57 @@ class View extends \PHPUnit_Framework_TestCase {
 		}
 	}
 
+	public function testLongPath() {
+
+		$storage = new \OC\Files\Storage\Temporary(array());
+		\OC\Files\Filesystem::mount($storage, array(), '/');
+
+		$rootView = new \OC\Files\View('');
+
+		$longPath = '';
+		// 4000 is the maximum path length in file_cache.path
+		$folderName = 'abcdefghijklmnopqrstuvwxyz012345678901234567890123456789';
+
+		$tmpdirLength = strlen(\OC_Helper::tmpFolder());
+		if (\OC_Util::runningOnWindows()) {
+			$this->markTestSkipped('[Windows] ');
+			$depth = ((260 - $tmpdirLength) / 57);
+		} elseif (\OC_Util::runningOnMac()){
+			$depth = ((1024 - $tmpdirLength) / 57);
+		} else {
+			$depth = ((4000 - $tmpdirLength) / 57);
+		}
+
+		foreach (range(0, $depth - 1) as $i) {
+			$longPath .= '/' . $folderName;
+			$result = $rootView->mkdir($longPath);
+			$this->assertTrue($result, "mkdir failed on $i - path length: " . strlen($longPath));
+
+			$result = $rootView->file_put_contents($longPath . '/test.txt', 'lorem');
+			$this->assertEquals(5, $result, "file_put_contents failed on $i");
+
+			$this->assertTrue($rootView->file_exists($longPath));
+			$this->assertTrue($rootView->file_exists($longPath . '/test.txt'));
+		}
+
+		$cache = $storage->getCache();
+		$scanner = $storage->getScanner();
+		$scanner->scan('');
+
+		$longPath = $folderName;
+		foreach (range(0, $depth - 1) as $i) {
+			$cachedFolder = $cache->get($longPath);
+			$this->assertTrue(is_array($cachedFolder), "No cache entry for folder at $i");
+			$this->assertEquals($folderName, $cachedFolder['name'], "Wrong cache entry for folder at $i");
+
+			$cachedFile = $cache->get($longPath . '/test.txt');
+			$this->assertTrue(is_array($cachedFile), "No cache entry for file at $i");
+			$this->assertEquals('test.txt', $cachedFile['name'], "Wrong cache entry for file at $i");
+
+			$longPath .= '/' . $folderName;
+		}
+	}
+
 	public function testTouchNotSupported() {
 		$storage = new TemporaryNoTouch(array());
 		$scanner = $storage->getScanner();
@@ -560,6 +658,140 @@ class View extends \PHPUnit_Framework_TestCase {
 		$scanner->scanFile('test', \OC\Files\Cache\Scanner::REUSE_ETAG);
 
 		$info2 = $view->getFileInfo('/test/test');
-		$this->assertEquals($info['etag'], $info2['etag']);
+		$this->assertSame($info['etag'], $info2['etag']);
+	}
+
+	/**
+	 * @dataProvider absolutePathProvider
+	 */
+	public function testGetAbsolutePath($expectedPath, $relativePath) {
+		$view = new \OC\Files\View('/files');
+		$this->assertEquals($expectedPath, $view->getAbsolutePath($relativePath));
+	}
+
+	public function testPartFileInfo() {
+		$storage = new Temporary(array());
+		$scanner = $storage->getScanner();
+		\OC\Files\Filesystem::mount($storage, array(), '/test/');
+		$storage->file_put_contents('test.part', 'foobar');
+		$scanner->scan('');
+		$view = new \OC\Files\View('/test');
+		$info = $view->getFileInfo('test.part');
+
+		$this->assertInstanceOf('\OCP\Files\FileInfo', $info);
+		$this->assertNull($info->getId());
+		$this->assertEquals(6, $info->getSize());
+	}
+
+	function absolutePathProvider() {
+		return array(
+			array('/files/', ''),
+			array('/files/0', '0'),
+			array('/files/false', 'false'),
+			array('/files/true', 'true'),
+			array('/files/', '/'),
+			array('/files/test', 'test'),
+			array('/files/test', '/test'),
+		);
+	}
+
+	/**
+	 * @dataProvider relativePathProvider
+	 */
+	function testGetRelativePath($absolutePath, $expectedPath) {
+		$view = new \OC\Files\View('/files');
+		// simulate a external storage mount point which has a trailing slash
+		$view->chroot('/files/');
+		$this->assertEquals($expectedPath, $view->getRelativePath($absolutePath));
+	}
+
+	function relativePathProvider() {
+		return array(
+			array('/files/', '/'),
+			array('/files', '/'),
+			array('/files/0', '0'),
+			array('/files/false', 'false'),
+			array('/files/true', 'true'),
+			array('/files/test', 'test'),
+			array('/files/test/foo', 'test/foo'),
+		);
+	}
+
+	/**
+	 * @dataProvider tooLongPathDataProvider
+	 * @expectedException \OCP\Files\InvalidPathException
+	 */
+	public function testTooLongPath($operation, $param0 = null) {
+
+		$longPath = '';
+		// 4000 is the maximum path length in file_cache.path
+		$folderName = 'abcdefghijklmnopqrstuvwxyz012345678901234567890123456789';
+		$depth = (4000 / 57);
+		foreach (range(0, $depth + 1) as $i) {
+			$longPath .= '/' . $folderName;
+		}
+
+		$storage = new \OC\Files\Storage\Temporary(array());
+		$this->tempStorage = $storage; // for later hard cleanup
+		\OC\Files\Filesystem::mount($storage, array(), '/');
+
+		$rootView = new \OC\Files\View('');
+
+		if ($param0 === '@0') {
+			$param0 = $longPath;
+		}
+
+		if ($operation === 'hash') {
+			$param0 = $longPath;
+			$longPath = 'md5';
+		}
+
+		call_user_func(array($rootView, $operation), $longPath, $param0);
+	}
+
+	public function tooLongPathDataProvider() {
+		return array(
+			array('getAbsolutePath'),
+			array('getRelativePath'),
+			array('getMountPoint'),
+			array('resolvePath'),
+			array('getLocalFile'),
+			array('getLocalFolder'),
+			array('mkdir'),
+			array('rmdir'),
+			array('opendir'),
+			array('is_dir'),
+			array('is_file'),
+			array('stat'),
+			array('filetype'),
+			array('filesize'),
+			array('readfile'),
+			array('isCreatable'),
+			array('isReadable'),
+			array('isUpdatable'),
+			array('isDeletable'),
+			array('isSharable'),
+			array('file_exists'),
+			array('filemtime'),
+			array('touch'),
+			array('file_get_contents'),
+			array('unlink'),
+			array('deleteAll'),
+			array('toTmpFile'),
+			array('getMimeType'),
+			array('free_space'),
+			array('getFileInfo'),
+			array('getDirectoryContent'),
+			array('getOwner'),
+			array('getETag'),
+			array('file_put_contents', 'ipsum'),
+			array('rename', '@0'),
+			array('copy', '@0'),
+			array('fopen', 'r'),
+			array('fromTmpFile', '@0'),
+			array('hash'),
+			array('hasUpdated', 0),
+			array('putFileInfo', array()),
+		);
 	}
 }

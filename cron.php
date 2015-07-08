@@ -48,7 +48,27 @@ try {
 
 	require_once 'lib/base.php';
 
-	session_write_close();
+	if (\OCP\Util::needUpgrade()) {
+		\OCP\Util::writeLog('cron', 'Update required, skipping cron', \OCP\Util::DEBUG);
+		exit;
+	}
+	if (\OC_Config::getValue('maintenance', false)) {
+		\OCP\Util::writeLog('cron', 'We are in maintenance mode, skipping cron', \OCP\Util::DEBUG);
+		exit;
+	}
+
+	if (\OCP\Config::getSystemValue('singleuser', false)) {
+		\OCP\Util::writeLog('cron', 'We are in admin only mode, skipping cron', \OCP\Util::DEBUG);
+		exit;
+	}
+
+	// load all apps to get all api routes properly setup
+	OC_App::loadApps();
+
+	\OC::$session->close();
+
+	// initialize a dummy memory session
+	\OC::$session = new \OC\Session\Memory('');
 
 	$logger = \OC_Log::$object;
 
@@ -60,8 +80,7 @@ try {
 	// Handle unexpected errors
 	register_shutdown_function('handleUnexpectedShutdown');
 
-	// Delete temp folder
-	OC_Helper::cleanTmpNoClean();
+	\OC::$server->getTempManager()->cleanOld();
 
 	// Exit if background jobs are disabled!
 	$appmode = OC_BackgroundJob::getExecutionType();
@@ -76,6 +95,22 @@ try {
 	}
 
 	if (OC::$CLI) {
+		// the cron job must be executed with the right user
+		if (!OC_Util::runningOnWindows())  {
+			if (!function_exists('posix_getuid')) {
+				echo "The posix extensions are required - see http://php.net/manual/en/book.posix.php" . PHP_EOL;
+				exit(0);
+			}
+			$user = posix_getpwuid(posix_getuid());
+			$configUser = posix_getpwuid(fileowner(OC::$SERVERROOT . '/config/config.php'));
+			if ($user['name'] !== $configUser['name']) {
+				echo "Console has to be executed with the same user as the web server is operated" . PHP_EOL;
+				echo "Current user: " . $user['name'] . PHP_EOL;
+				echo "Web server user: " . $configUser['name'] . PHP_EOL;
+				exit(0);
+			}
+		}
+
 		// Create lock file first
 		TemporaryCronClass::$lockfile = OC_Config::getValue("datadirectory", OC::$SERVERROOT . '/data') . '/cron.lock';
 
@@ -97,7 +132,7 @@ try {
 		touch(TemporaryCronClass::$lockfile);
 
 		// Work
-		$jobList = new \OC\BackgroundJob\JobList();
+		$jobList = \OC::$server->getJobList();
 		$jobs = $jobList->getAll();
 		foreach ($jobs as $job) {
 			$job->execute($jobList, $logger);
@@ -109,16 +144,22 @@ try {
 			OC_JSON::error(array('data' => array('message' => 'Backgroundjobs are using system cron!')));
 		} else {
 			// Work and success :-)
-			$jobList = new \OC\BackgroundJob\JobList();
+			$jobList = \OC::$server->getJobList();
 			$job = $jobList->getNext();
-			$job->execute($jobList, $logger);
-			$jobList->setLastJob($job);
+			if ($job != null) {
+				$job->execute($jobList, $logger);
+				$jobList->setLastJob($job);
+			}
 			OC_JSON::success();
 		}
 	}
 
 	// done!
 	TemporaryCronClass::$sent = true;
+	// Log the successfull cron exec
+	if (OC_Config::getValue('cron_log', true)) {
+		OC_Appconfig::setValue('core', 'lastcron', time());
+	}
 	exit();
 
 } catch (Exception $ex) {

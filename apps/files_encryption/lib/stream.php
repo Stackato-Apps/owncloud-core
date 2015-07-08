@@ -2,9 +2,10 @@
 /**
  * ownCloud
  *
- * @author Robin Appelman
- * @copyright 2012 Sam Tuke <samtuke@owncloud.com>, 2011 Robin Appelman
- * <icewind1991@gmail.com>
+ * @author Bjoern Schiessle, Robin Appelman
+ * @copyright 2014 Bjoern Schiessle <schiessle@owncloud.com>
+ *            2012 Sam Tuke <samtuke@owncloud.com>,
+ *            2011 Robin Appelman <icewind1991@gmail.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE
@@ -31,7 +32,7 @@
 namespace OCA\Encryption;
 
 /**
- * @brief Provides 'crypt://' stream wrapper protocol.
+ * Provides 'crypt://' stream wrapper protocol.
  * @note We use a stream wrapper because it is the most secure way to handle
  * decrypted content transfers. There is no safe way to decrypt the entire file
  * somewhere on the server, so we have to encrypt and decrypt blocks on the fly.
@@ -49,9 +50,11 @@ namespace OCA\Encryption;
  * encryption proxies are used and keyfiles deleted.
  */
 class Stream {
+
+	const PADDING_CHAR = '-';
+
 	private $plainKey;
 	private $encKeyfiles;
-
 	private $rawPath; // The raw path relative to the data dir
 	private $relPath; // rel path to users file dir
 	private $userId;
@@ -66,6 +69,9 @@ class Stream {
 	private $newFile; // helper var, we only need to write the keyfile for new files
 	private $isLocalTmpFile = false; // do we operate on a local tmp file
 	private $localTmpFile; // path of local tmp file
+	private $headerWritten = false;
+	private $containHeader = false; // the file contain a header
+	private $cipher; // cipher used for encryption/decryption
 
 	/**
 	 * @var \OC\Files\View
@@ -79,19 +85,22 @@ class Stream {
 	private $privateKey;
 
 	/**
-	 * @param $path raw path relative to data/
-	 * @param $mode
-	 * @param $options
-	 * @param $opened_path
+	 * @param string $path raw path relative to data/
+	 * @param string $mode
+	 * @param int $options
+	 * @param string $opened_path
 	 * @return bool
 	 */
 	public function stream_open($path, $mode, $options, &$opened_path) {
+
+		// read default cipher from config
+		$this->cipher = Helper::getCipher();
 
 		// assume that the file already exist before we decide it finally in getKey()
 		$this->newFile = false;
 
 		if (!isset($this->rootView)) {
-			$this->rootView = new \OC_FilesystemView('/');
+			$this->rootView = new \OC\Files\View('/');
 		}
 
 		$this->session = new \OCA\Encryption\Session($this->rootView);
@@ -150,6 +159,9 @@ class Stream {
 			}
 
 			$this->size = $this->rootView->filesize($this->rawPath);
+
+			$this->readHeader();
+
 		}
 
 		if ($this->isLocalTmpFile) {
@@ -178,22 +190,50 @@ class Stream {
 
 	}
 
+	private function readHeader() {
+
+		if ($this->isLocalTmpFile) {
+			$handle = fopen($this->localTmpFile, 'r');
+		} else {
+			$handle = $this->rootView->fopen($this->rawPath, 'r');
+		}
+
+		if (is_resource($handle)) {
+			$data = fread($handle, Crypt::BLOCKSIZE);
+
+			$header = Crypt::parseHeader($data);
+			$this->cipher = Crypt::getCipher($header);
+
+			// remeber that we found a header
+			if (!empty($header)) {
+				$this->containHeader = true;
+			}
+
+			fclose($handle);
+		}
+	}
+
 	/**
-	 * @brief Returns the current position of the file pointer
-	 * @return int  position of the file pointer
+	 * Returns the current position of the file pointer
+	 * @return int position of the file pointer
 	 */
 	public function stream_tell() {
 		return ftell($this->handle);
 	}
 
 	/**
-	 * @param $offset
+	 * @param int $offset
 	 * @param int $whence
 	 * @return bool true if fseek was successful, otherwise false
 	 */
 	public function stream_seek($offset, $whence = SEEK_SET) {
 
 		$this->flush();
+
+		// ignore the header and just overstep it
+		if ($this->containHeader) {
+			$offset += Crypt::BLOCKSIZE;
+		}
 
 		// this wrapper needs to return "true" for success.
 		// the fseek call itself returns 0 on succeess
@@ -202,26 +242,26 @@ class Stream {
 	}
 
 	/**
-	 * @param $count
+	 * @param int $count
 	 * @return bool|string
-	 * @throws \Exception
+	 * @throws \OCA\Encryption\Exceptions\EncryptionException
 	 */
 	public function stream_read($count) {
 
 		$this->writeCache = '';
 
-		if ($count !== 8192) {
-
-			// $count will always be 8192 https://bugs.php.net/bug.php?id=21641
-			// This makes this function a lot simpler, but will break this class if the above 'bug' gets 'fixed'
+		if ($count !== Crypt::BLOCKSIZE) {
 			\OCP\Util::writeLog('Encryption library', 'PHP "bug" 21641 no longer holds, decryption system requires refactoring', \OCP\Util::FATAL);
-
-			die();
-
+			throw new \OCA\Encryption\Exceptions\EncryptionException('expected a blog size of 8192 byte', 20);
 		}
 
 		// Get the data from the file handle
 		$data = fread($this->handle, $count);
+
+		// if this block contained the header we move on to the next block
+		if (Crypt::isHeader($data)) {
+			$data = fread($this->handle, $count);
+		}
 
 		$result = null;
 
@@ -236,7 +276,7 @@ class Stream {
 			} else {
 
 				// Decrypt data
-				$result = Crypt::symmetricDecryptFileContent($data, $this->plainKey);
+				$result = Crypt::symmetricDecryptFileContent($data, $this->plainKey, $this->cipher);
 			}
 
 		}
@@ -246,7 +286,7 @@ class Stream {
 	}
 
 	/**
-	 * @brief Encrypt and pad data ready for writing to disk
+	 * Encrypt and pad data ready for writing to disk
 	 * @param string $plainData data to be encrypted
 	 * @param string $key key to use for encryption
 	 * @return string encrypted data on success, false on failure
@@ -254,7 +294,7 @@ class Stream {
 	public function preWriteEncrypt($plainData, $key) {
 
 		// Encrypt data to 'catfile', which includes IV
-		if ($encrypted = Crypt::symmetricEncryptFileContent($plainData, $key)) {
+		if ($encrypted = Crypt::symmetricEncryptFileContent($plainData, $key, $this->cipher)) {
 
 			return $encrypted;
 
@@ -267,7 +307,7 @@ class Stream {
 	}
 
 	/**
-	 * @brief Fetch the plain encryption key for the file and set it as plainKey property
+	 * Fetch the plain encryption key for the file and set it as plainKey property
 	 * @internal param bool $generate if true, a new key will be generated if none can be found
 	 * @return bool true on key found and set, false on key not found and new key generated and set
 	 */
@@ -318,7 +358,26 @@ class Stream {
 	}
 
 	/**
-	 * @brief Handle plain data from the stream, and write it in 8192 byte blocks
+	 * write header at beginning of encrypted file
+	 *
+	 * @throws Exceptions\EncryptionException
+	 */
+	private function writeHeader() {
+
+		$header = Crypt::generateHeader();
+
+		if (strlen($header) > Crypt::BLOCKSIZE) {
+			throw new Exceptions\EncryptionException('max header size exceeded', 30);
+		}
+
+		$paddedHeader = str_pad($header, Crypt::BLOCKSIZE, self::PADDING_CHAR, STR_PAD_RIGHT);
+
+		fwrite($this->handle, $paddedHeader);
+		$this->headerWritten = true;
+	}
+
+	/**
+	 * Handle plain data from the stream, and write it in 8192 byte blocks
 	 * @param string $data data to be written to disk
 	 * @note the data will be written to the path stored in the stream handle, set in stream_open()
 	 * @note $data is only ever be a maximum of 8192 bytes long. This is set by PHP internally. stream_write() is called multiple times in a loop on data larger than 8192 bytes
@@ -332,6 +391,10 @@ class Stream {
 		if ($this->privateKey === false) {
 			$this->size = 0;
 			return strlen($data);
+		}
+
+		if ($this->headerWritten === false) {
+			$this->writeHeader();
 		}
 
 		// Disable the file proxies so that encryption is not
@@ -426,9 +489,9 @@ class Stream {
 
 
 	/**
-	 * @param $option
-	 * @param $arg1
-	 * @param $arg2
+	 * @param int $option
+	 * @param int $arg1
+	 * @param int|null $arg2
 	 */
 	public function stream_set_option($option, $arg1, $arg2) {
 		$return = false;
@@ -454,7 +517,7 @@ class Stream {
 	}
 
 	/**
-	 * @param $mode
+	 * @param int $mode
 	 */
 	public function stream_lock($mode) {
 		return flock($this->handle, $mode);
@@ -510,6 +573,7 @@ class Stream {
 				\OC_FileProxy::$enabled = false;
 
 				if ($this->rootView->file_exists($this->rawPath) && $this->size === 0) {
+					fclose($this->handle);
 					$this->rootView->unlink($this->rawPath);
 				}
 
@@ -545,7 +609,7 @@ class Stream {
 				$util = new Util($this->rootView, $this->userId);
 
 				// Get all users sharing the file includes current user
-				$uniqueUserIds = $util->getSharingUsersArray($sharingEnabled, $this->relPath, $this->userId);
+				$uniqueUserIds = $util->getSharingUsersArray($sharingEnabled, $this->relPath);
 				$checkedUserIds = $util->filterShareReadyUsers($uniqueUserIds);
 
 				// Fetch public keys for all sharing users
@@ -568,21 +632,25 @@ class Stream {
 			// part file.
 			$path = Helper::stripPartialFileExtension($this->rawPath);
 
-			// get file info
-			$fileInfo = $this->rootView->getFileInfo($path);
-			if (is_array($fileInfo)) {
-				// set encryption data
-				$fileInfo['encrypted'] = true;
-				$fileInfo['size'] = $this->size;
-				$fileInfo['unencrypted_size'] = $this->unencryptedSize;
+			$fileInfo = array(
+				'encrypted' => true,
+				'size' => $this->size,
+				'unencrypted_size' => $this->unencryptedSize,
+			);
 
-				// set fileinfo
-				$this->rootView->putFileInfo($path, $fileInfo);
-			}
+			// set fileinfo
+			$this->rootView->putFileInfo($path, $fileInfo);
 
 		}
 
-		return fclose($this->handle);
+		$result = fclose($this->handle);
+
+		if ($result === false) {
+			\OCP\Util::writeLog('Encryption library', 'Could not close stream, file could be corrupted', \OCP\Util::FATAL);
+		}
+
+		return $result;
+
 	}
 
 }

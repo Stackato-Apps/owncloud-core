@@ -29,27 +29,33 @@
 class OC_OCSClient{
 
 	/**
-	 * @brief Get the url of the OCS AppStore server.
-	 * @returns string of the AppStore server
+	 * Returns whether the AppStore is enabled (i.e. because the AppStore is disabled for EE)
+	 * @return bool
+	 */
+	protected static function isAppstoreEnabled() {
+		if(OC::$server->getConfig()->getSystemValue('appstoreenabled', true) === false OR OC_Util::getEditionString() !== '') {
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Get the url of the OCS AppStore server.
+	 * @return string of the AppStore server
 	 *
 	 * This function returns the url of the OCS AppStore server. It´s possible
 	 * to set it in the config file or it will fallback to the default
 	 */
 	private static function getAppStoreURL() {
-		if(OC_Util::getEditionString()===''){
-			$default='http://api.apps.owncloud.com/v1';
-		}else{
-			$default='';
-		}
-		$url = OC_Config::getValue('appstoreurl', $default);
-		return($url);
+		return OC::$server->getConfig()->getSystemValue('appstoreurl', 'https://api.owncloud.com/v1');
 	}
 
-
 	/**
-	 * @brief Get the content of an OCS url call.
-	 * @returns string of the response
+	 * Get the content of an OCS url call.
+	 * @return string of the response
 	 * This function calls an OCS server and returns the response. It also sets a sane timeout
+	* @param string $url
 	*/
 	private static function getOCSresponse($url) {
 		$data = \OC_Util::getUrlContent($url);
@@ -57,16 +63,19 @@ class OC_OCSClient{
 	}
 
 	/**
-	 * @brief Get all the categories from the OCS server
-	 * @returns array with category ids
+	 * Get all the categories from the OCS server
+	 * @return array|null an array of category ids or null
 	 * @note returns NULL if config value appstoreenabled is set to false
 	 * This function returns a list of all the application categories on the OCS server
+	 *
+	 * @param array $targetVersion The target ownCloud version
 	 */
-	public static function getCategories() {
-		if(OC_Config::getValue('appstoreenabled', true)==false) {
+	public static function getCategories(array $targetVersion) {
+		if(!self::isAppstoreEnabled()) {
 			return null;
 		}
 		$url=OC_OCSClient::getAppStoreURL().'/content/categories';
+		$url .= '?version='.implode('x', $targetVersion);
 		$xml=OC_OCSClient::getOCSresponse($url);
 		if($xml==false) {
 			return null;
@@ -90,13 +99,17 @@ class OC_OCSClient{
 	}
 
 	/**
-	 * @brief Get all the applications from the OCS server
-	 * @returns array with application data
+	 * Get all the applications from the OCS server
+	 * @return array|null an array of application data or null
 	 *
 	 * This function returns a list of all the applications on the OCS server
+	 * @param array|string $categories
+	 * @param int $page
+	 * @param string $filter
+	 * @param array $targetVersion The target ownCloud version
 	 */
-	public static function getApplications($categories, $page, $filter) {
-		if(OC_Config::getValue('appstoreenabled', true)==false) {
+	public static function getApplications($categories, $page, $filter, array $targetVersion) {
+		if(!self::isAppstoreEnabled()) {
 			return(array());
 		}
 
@@ -106,7 +119,7 @@ class OC_OCSClient{
 			$categoriesstring=$categories;
 		}
 
-		$version='&version='.implode('x', \OC_Util::getVersion());
+		$version='&version='.implode('x', $targetVersion);
 		$filterurl='&filter='.urlencode($filter);
 		$url=OC_OCSClient::getAppStoreURL().'/content/data?categories='.urlencode($categoriesstring)
 			.'&sortmode=new&page='.urlencode($page).'&pagesize=100'.$filterurl.$version;
@@ -144,20 +157,23 @@ class OC_OCSClient{
 
 
 	/**
-	 * @brief Get an the applications from the OCS server
-	 * @returns array with application data
+	 * Get an the applications from the OCS server
+	 * @param string $id
+	 * @param array $targetVersion The target ownCloud version
+	 * @return array|null an array of application data or null
 	 *
-	 * This function returns an  applications from the OCS server
+	 * This function returns an applications from the OCS server
 	 */
-	public static function getApplication($id) {
-		if(OC_Config::getValue('appstoreenabled', true)==false) {
+	public static function getApplication($id, array $targetVersion) {
+		if(!self::isAppstoreEnabled()) {
 			return null;
 		}
 		$url=OC_OCSClient::getAppStoreURL().'/content/data/'.urlencode($id);
+		$url .= '?version='.implode('x', $targetVersion);
 		$xml=OC_OCSClient::getOCSresponse($url);
 
 		if($xml==false) {
-			OC_Log::write('core', 'Unable to parse OCS content', OC_Log::FATAL);
+			OC_Log::write('core', 'Unable to parse OCS content for app ' . $id, OC_Log::FATAL);
 			return null;
 		}
 		$loadEntities = libxml_disable_entity_loader(true);
@@ -165,6 +181,10 @@ class OC_OCSClient{
 		libxml_disable_entity_loader($loadEntities);
 
 		$tmp=$data->data->content;
+		if (is_null($tmp)) {
+			OC_Log::write('core', 'Invalid OCS content returned for app ' . $id, OC_Log::FATAL);
+			return null;
+		}
 		$app=array();
 		$app['id']=$tmp->id;
 		$app['name']=$tmp->name;
@@ -186,16 +206,20 @@ class OC_OCSClient{
 	}
 
 	/**
-		* @brief Get the download url for an application from the OCS server
-		* @returns array with application data
-		*
-		* This function returns an download url for an applications from the OCS server
-		*/
-	public static function getApplicationDownload($id, $item) {
-		if(OC_Config::getValue('appstoreenabled', true)==false) {
+	 * Get the download url for an application from the OCS server
+	 * @return array|null an array of application data or null
+	 *
+	 * This function returns an download url for an applications from the OCS server
+	 * @param string $id
+	 * @param integer $item
+	 * @param array $targetVersion The target ownCloud version
+	 */
+	public static function getApplicationDownload($id, $item, array $targetVersion) {
+		if(!self::isAppstoreEnabled()) {
 			return null;
 		}
 		$url=OC_OCSClient::getAppStoreURL().'/content/download/'.urlencode($id).'/'.urlencode($item);
+		$url .= '?version='.implode('x', $targetVersion);
 		$xml=OC_OCSClient::getOCSresponse($url);
 
 		if($xml==false) {
@@ -215,7 +239,5 @@ class OC_OCSClient{
 		}
 		return $app;
 	}
-
-
 
 }

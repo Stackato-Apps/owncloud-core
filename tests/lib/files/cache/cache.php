@@ -239,6 +239,12 @@ class Cache extends \PHPUnit_Framework_TestCase {
 		$this->assertEquals(1, count($this->cache->search('folder%')));
 		$this->assertEquals(3, count($this->cache->search('%')));
 
+		// case insensitive search should match the same files
+		$this->assertEquals(2, count($this->cache->search('%Foo%')));
+		$this->assertEquals(1, count($this->cache->search('Foo')));
+		$this->assertEquals(1, count($this->cache->search('%Folder%')));
+		$this->assertEquals(1, count($this->cache->search('Folder%')));
+
 		$this->assertEquals(3, count($this->cache->searchByMime('foo')));
 		$this->assertEquals(2, count($this->cache->searchByMime('foo/file')));
 	}
@@ -343,7 +349,7 @@ class Cache extends \PHPUnit_Framework_TestCase {
 	}
 
 	/**
-	 * @brief this test show the bug resulting if we have no normalizer installed
+	 * this test show the bug resulting if we have no normalizer installed
 	 */
 	public function testWithoutNormalizer() {
 		// folder name "Schön" with U+00F6 (normalized)
@@ -386,7 +392,7 @@ class Cache extends \PHPUnit_Framework_TestCase {
 	}
 
 	/**
-	 * @brief this test shows that there is no bug if we use the normalizer
+	 * this test shows that there is no bug if we use the normalizer
 	 */
 	public function testWithNormalizer() {
 

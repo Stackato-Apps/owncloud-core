@@ -26,8 +26,8 @@ namespace OCA\user_ldap\lib;
 class Helper {
 
 	/**
-	 * @brief returns prefixes for each saved LDAP/AD server configuration.
-	 * @param bool optional, whether only active configuration shall be
+	 * returns prefixes for each saved LDAP/AD server configuration.
+	 * @param bool $activeConfigurations optional, whether only active configuration shall be
 	 * retrieved, defaults to false
 	 * @return array with a list of the available prefixes
 	 *
@@ -45,7 +45,7 @@ class Helper {
 	 * except the default (first) server shall be connected to.
 	 *
 	 */
-	static public function getServerConfigurationPrefixes($activeConfigurations = false) {
+	public function getServerConfigurationPrefixes($activeConfigurations = false) {
 		$referenceConfigkey = 'ldap_configuration_active';
 
 		$sql = '
@@ -79,11 +79,11 @@ class Helper {
 
 	/**
 	 *
-	 * @brief determines the host for every configured connection
-	 * @return an array with configprefix as keys
+	 * determines the host for every configured connection
+	 * @return array an array with configprefix as keys
 	 *
 	 */
-	static public function getServerConfigurationHosts() {
+	public function getServerConfigurationHosts() {
 		$referenceConfigkey = 'ldap_host';
 
 		$query = '
@@ -106,11 +106,11 @@ class Helper {
 	}
 
 	/**
-	 * @brief deletes a given saved LDAP/AD server configuration.
-	 * @param string the configuration prefix of the config to delete
+	 * deletes a given saved LDAP/AD server configuration.
+	 * @param string $prefix the configuration prefix of the config to delete
 	 * @return bool true on success, false otherwise
 	 */
-	static public function deleteServerConfiguration($prefix) {
+	public function deleteServerConfiguration($prefix) {
 		//just to be on the safe side
 		\OCP\User::checkAdminUser();
 
@@ -145,12 +145,28 @@ class Helper {
 	}
 
 	/**
+	 * checks whether there is one or more disabled LDAP configurations
+	 * @throws \Exception
+	 * @return bool
+	 */
+	public function haveDisabledConfigurations() {
+		$all = $this->getServerConfigurationPrefixes(false);
+		$active = $this->getServerConfigurationPrefixes(true);
+
+		if(!is_array($all) || !is_array($active)) {
+			throw new \Exception('Unexpected Return Value');
+		}
+
+		return count($all) !== count($active) || count($all) === 0;
+	}
+
+	/**
 	 * Truncate's the given mapping table
 	 *
 	 * @param string $mapping either 'user' or 'group'
-	 * @return boolean true on success, false otherwise
+	 * @return bool true on success, false otherwise
 	 */
-	static public function clearMapping($mapping) {
+	public function clearMapping($mapping) {
 		if($mapping === 'user') {
 			$table = '`*PREFIX*ldap_user_mapping`';
 		} else if ($mapping === 'group') {
@@ -159,13 +175,9 @@ class Helper {
 			return false;
 		}
 
-		if(strpos(\OCP\Config::getSystemValue('dbtype'), 'sqlite') !== false) {
-			$query = \OCP\DB::prepare('DELETE FROM '.$table);
-		} else {
-			$query = \OCP\DB::prepare('TRUNCATE '.$table);
-		}
-
-
+		$connection = \OC_DB::getConnection();
+		$sql = $connection->getDatabasePlatform()->getTruncateTableSQL($table);
+		$query = \OCP\DB::prepare($sql);
 		$res = $query->execute();
 
 		if(\OCP\DB::isError($res)) {
@@ -176,11 +188,11 @@ class Helper {
 	}
 
 	/**
-	 * @brief extractsthe domain from a given URL
-	 * @param $url the URL
-	 * @return mixed, domain as string on success, false otherwise
+	 * extracts the domain from a given URL
+	 * @param string $url the URL
+	 * @return string|false domain as string on success, false otherwise
 	 */
-	static public function getDomainFromURL($url) {
+	public function getDomainFromURL($url) {
 		$uinfo = parse_url($url);
 		if(!is_array($uinfo)) {
 			return false;

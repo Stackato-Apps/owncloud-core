@@ -4,7 +4,7 @@
  * ownCloud - App Framework
  *
  * @author Bernhard Posselt
- * @copyright 2012 Bernhard Posselt nukeawhale@gmail.com
+ * @copyright 2012 Bernhard Posselt <dev@bernhard-posselt.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE
@@ -22,14 +22,30 @@
  */
 
 
-namespace Test\AppFramework\Controller;
+namespace OCP\AppFramework;
 
 use OC\AppFramework\Http\Request;
-use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\TemplateResponse;
+use OCP\AppFramework\Http\JSONResponse;
 
 
-class ChildController extends Controller {};
+class ChildController extends Controller {
+
+	public function __construct($appName, $request) {
+		parent::__construct($appName, $request);
+		$this->registerResponder('tom', function ($respone) {
+			return 'hi';
+		});
+	}
+
+	public function custom($in) {
+		$this->registerResponder('json', function ($response) {
+			return new JSONResponse(array(strlen($response)));
+		});
+
+		return $in;
+	}
+};
 
 class ControllerTest extends \PHPUnit_Framework_TestCase {
 
@@ -128,5 +144,54 @@ class ControllerTest extends \PHPUnit_Framework_TestCase {
 	public function testGetEnvVariable(){
 		$this->assertEquals('daheim', $this->controller->env('PATH'));
 	}
+
+
+	/**
+	 * @expectedException \DomainException
+	 */
+	public function testFormatResonseInvalidFormat() {
+		$this->controller->buildResponse(null, 'test');
+	}
+
+
+	public function testFormat() {
+		$response = $this->controller->buildResponse(array('hi'), 'json');
+
+		$this->assertEquals(array('hi'), $response->getData());
+	}
+
+
+	public function testCustomFormatter() {
+		$response = $this->controller->custom('hi');
+		$response = $this->controller->buildResponse($response, 'json');
+
+		$this->assertEquals(array(2), $response->getData());
+	}
+
+
+	public function testDefaultResponderToJSON() {
+		$responder = $this->controller->getResponderByHTTPHeader('*/*');
+
+		$this->assertEquals('json', $responder);
+	}
+
+
+	public function testResponderAcceptHeaderParsed() {
+		$responder = $this->controller->getResponderByHTTPHeader(
+			'*/*, application/tom, application/json'
+		);
+
+		$this->assertEquals('tom', $responder);
+	}
+
+
+	public function testResponderAcceptHeaderParsedUpperCase() {
+		$responder = $this->controller->getResponderByHTTPHeader(
+			'*/*, apPlication/ToM, application/json'
+		);
+
+		$this->assertEquals('tom', $responder);
+	}
+
 
 }
