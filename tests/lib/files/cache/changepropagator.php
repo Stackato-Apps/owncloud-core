@@ -12,7 +12,7 @@ use OC\Files\Filesystem;
 use OC\Files\Storage\Temporary;
 use OC\Files\View;
 
-class ChangePropagator extends \PHPUnit_Framework_TestCase {
+class ChangePropagator extends \Test\TestCase {
 	/**
 	 * @var \OC\Files\Cache\ChangePropagator
 	 */
@@ -23,10 +23,17 @@ class ChangePropagator extends \PHPUnit_Framework_TestCase {
 	 */
 	private $view;
 
-	public function setUp() {
-		$storage = new Temporary(array());
-		$root = '/' . uniqid();
-		Filesystem::mount($storage, array(), $root);
+	/**
+	 * @var \OC\Files\Storage\Storage
+	 */
+	private $storage;
+
+	protected function setUp() {
+		parent::setUp();
+
+		$this->storage = new Temporary(array());
+		$root = $this->getUniqueID('/');
+		Filesystem::mount($this->storage, array(), $root);
 		$this->view = new View($root);
 		$this->propagator = new \OC\Files\Cache\ChangePropagator($this->view);
 	}
@@ -68,5 +75,23 @@ class ChangePropagator extends \PHPUnit_Framework_TestCase {
 		$this->assertNotSame($oldInfo1->getEtag(), $newInfo1->getEtag());
 		$this->assertNotSame($oldInfo2->getEtag(), $newInfo2->getEtag());
 		$this->assertNotSame($oldInfo3->getEtag(), $newInfo3->getEtag());
+	}
+
+	public function testDontLowerMtime() {
+		$time = time();
+		$this->view->mkdir('/foo');
+		$this->view->mkdir('/foo/bar');
+
+		$cache = $this->storage->getCache();
+		$cache->put('', ['mtime' => $time - 50]);
+		$cache->put('foo', ['mtime' => $time - 150]);
+		$cache->put('foo/bar', ['mtime' => $time - 250]);
+
+		$this->propagator->addChange('/foo/bar/foo');
+		$this->propagator->propagateChanges($time - 100);
+
+		$this->assertEquals(50, $time - $cache->get('')['mtime']);
+		$this->assertEquals(100, $time - $cache->get('foo')['mtime']);
+		$this->assertEquals(100, $time - $cache->get('foo/bar')['mtime']);
 	}
 }

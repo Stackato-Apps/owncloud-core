@@ -1,9 +1,23 @@
 <?php
 /**
- * Copyright (c) 2014 Arthur Schiwon <blizzz@owncloud.com>
- * This file is licensed under the Affero General Public License version 3 or
- * later.
- * See the COPYING-README file.
+ * @author Arthur Schiwon <blizzz@owncloud.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
  */
 
 namespace OCA\user_ldap\tests;
@@ -13,6 +27,10 @@ class Test_CleanUp extends \PHPUnit_Framework_TestCase {
 		$mocks = array();
 		$mocks['userBackend'] =
 			$this->getMockBuilder('\OCA\user_ldap\User_Proxy')
+				->disableOriginalConstructor()
+				->getMock();
+		$mocks['deletedUsersIndex'] =
+			$this->getMockBuilder('\OCA\user_ldap\lib\user\deletedUsersIndex')
 				->disableOriginalConstructor()
 				->getMock();
 		$mocks['ocConfig']    = $this->getMock('\OCP\IConfig');
@@ -99,30 +117,6 @@ class Test_CleanUp extends \PHPUnit_Framework_TestCase {
 
 		$result = $bgJob->isCleanUpAllowed();
 		$this->assertSame(true, $result);
-	}
-
-	/**
-	 * test whether sql is OK
-	 */
-	public function test_getMappedUsers() {
-		$args = $this->getMocks();
-
-		$bgJob = new \OCA\User_LDAP\Jobs\CleanUp();
-		$bgJob->setArguments($args);
-
-		if(version_compare(\PHPUnit_Runner_Version::id(), '3.8', '<')) {
-			//otherwise we run into
-			//https://github.com/sebastianbergmann/phpunit-mock-objects/issues/103
-			$this->markTestIncomplete();
-		}
-
-		$stmt = $this->getMock('\Doctrine\DBAL\Driver\Statement');
-
-		$args['db']->expects($this->once())
-			->method('prepare')
-			->will($this->returnValue($stmt));
-
-		$bgJob->getMappedUsers(0, $bgJob->getChunkSize());
 	}
 
 	/**

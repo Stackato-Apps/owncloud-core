@@ -1,22 +1,23 @@
 <?php
 /**
- * ownCloud
+ * @author Joas Schilling <nickvergessen@owncloud.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
  *
- * @author Thomas Müller
- * Copyright (c) 2014 Thomas Müller <deepdiver@owncloud.com>
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE
- * License as published by the Free Software Foundation; either
- * version 3 of the License, or any later version.
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
  *
- * This library is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU AFFERO GENERAL PUBLIC LICENSE for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU Affero General Public
- * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
  *
  */
 
@@ -36,7 +37,7 @@ class Test_Mount_Config_Dummy_Backend {
 /**
  * Class Test_Dynamic_Mount_Config
  */
-class Test_Dynamic_Mount_Config extends \PHPUnit_Framework_TestCase {
+class Test_Dynamic_Mount_Config extends \Test\TestCase {
 
 	private $backup;
 
@@ -82,6 +83,7 @@ class Test_Dynamic_Mount_Config extends \PHPUnit_Framework_TestCase {
 	}
 
 	protected function setUp() {
+		parent::setUp();
 
 		$this->backup = OC_Mount_Config::setUp();
 
@@ -97,5 +99,6 @@ class Test_Dynamic_Mount_Config extends \PHPUnit_Framework_TestCase {
 	protected function tearDown()
 	{
 		OC_Mount_Config::setUp($this->backup);
+		parent::tearDown();
 	}
 }

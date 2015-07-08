@@ -5,6 +5,7 @@
  * To the end of config/config.php to enable debug mode.
  * The undefined checks fix the broken ie8 console
  */
+
 var oc_debug;
 var oc_webroot;
 
@@ -37,121 +38,6 @@ if (
 	}
 }
 
-function initL10N(app) {
-	if (!( t.cache[app] )) {
-		$.ajax(OC.filePath('core', 'ajax', 'translations.php'), {
-			// TODO a proper solution for this without sync ajax calls
-			async: false,
-			data: {'app': app},
-			type: 'POST',
-			success: function (jsondata) {
-				t.cache[app] = jsondata.data;
-				t.plural_form = jsondata.plural_form;
-			}
-		});
-
-		// Bad answer ...
-		if (!( t.cache[app] )) {
-			t.cache[app] = [];
-		}
-	}
-	if (typeof t.plural_function[app] === 'undefined') {
-		t.plural_function[app] = function (n) {
-			var p = (n !== 1) ? 1 : 0;
-			return { 'nplural' : 2, 'plural' : p };
-		};
-
-		/**
-		 * code below has been taken from jsgettext - which is LGPL licensed
-		 * https://developer.berlios.de/projects/jsgettext/
-		 * http://cvs.berlios.de/cgi-bin/viewcvs.cgi/jsgettext/jsgettext/lib/Gettext.js
-		 */
-		var pf_re = new RegExp('^(\\s*nplurals\\s*=\\s*[0-9]+\\s*;\\s*plural\\s*=\\s*(?:\\s|[-\\?\\|&=!<>+*/%:;a-zA-Z0-9_\\(\\)])+)', 'm');
-		if (pf_re.test(t.plural_form)) {
-			//ex english: "Plural-Forms: nplurals=2; plural=(n != 1);\n"
-			//pf = "nplurals=2; plural=(n != 1);";
-			//ex russian: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10< =4 && (n%100<10 or n%100>=20) ? 1 : 2)
-			//pf = "nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2)";
-			var pf = t.plural_form;
-			if (! /;\s*$/.test(pf)) {
-				pf = pf.concat(';');
-			}
-			/* We used to use eval, but it seems IE has issues with it.
-			 * We now use "new Function", though it carries a slightly
-			 * bigger performance hit.
-			var code = 'function (n) { var plural; var nplurals; '+pf+' return { "nplural" : nplurals, "plural" : (plural === true ? 1 : plural ? plural : 0) }; };';
-			Gettext._locale_data[domain].head.plural_func = eval("("+code+")");
-			 */
-			var code = 'var plural; var nplurals; '+pf+' return { "nplural" : nplurals, "plural" : (plural === true ? 1 : plural ? plural : 0) };';
-			t.plural_function[app] = new Function("n", code);
-		} else {
-			console.log("Syntax error in language file. Plural-Forms header is invalid ["+t.plural_forms+"]");
-		}
-	}
-}
-/**
- * translate a string
- * @param {string} app the id of the app for which to translate the string
- * @param {string} text the string to translate
- * @param [vars] FIXME
- * @param {number} [count] number to replace %n with
- * @return {string}
- */
-function t(app, text, vars, count){
-	initL10N(app);
-	var _build = function (text, vars, count) {
-		return text.replace(/%n/g, count).replace(/{([^{}]*)}/g,
-			function (a, b) {
-				var r = vars[b];
-				return typeof r === 'string' || typeof r === 'number' ? r : a;
-			}
-		);
-	};
-	var translation = text;
-	if( typeof( t.cache[app][text] ) !== 'undefined' ){
-		translation = t.cache[app][text];
-	}
-
-	if(typeof vars === 'object' || count !== undefined ) {
-		return _build(translation, vars, count);
-	} else {
-		return translation;
-	}
-}
-t.cache = {};
-// different apps might or might not redefine the nplurals function correctly
-// this is to make sure that a "broken" app doesn't mess up with the
-// other app's plural function
-t.plural_function = {};
-
-/**
- * translate a string
- * @param {string} app the id of the app for which to translate the string
- * @param {string} text_singular the string to translate for exactly one object
- * @param {string} text_plural the string to translate for n objects
- * @param {number} count number to determine whether to use singular or plural
- * @param [vars] FIXME
- * @return {string} Translated string
- */
-function n(app, text_singular, text_plural, count, vars) {
-	initL10N(app);
-	var identifier = '_' + text_singular + '_::_' + text_plural + '_';
-	if( typeof( t.cache[app][identifier] ) !== 'undefined' ){
-		var translation = t.cache[app][identifier];
-		if ($.isArray(translation)) {
-			var plural = t.plural_function[app](count);
-			return t(app, translation[plural.plural], vars, count);
-		}
-	}
-
-	if(count === 1) {
-		return t(app, text_singular, vars, count);
-	}
-	else{
-		return t(app, text_plural, vars, count);
-	}
-}
-
 /**
 * Sanitizes a HTML string by replacing all potential dangerous characters with HTML entities
 * @param {string} s String to sanitize
@@ -172,6 +58,7 @@ function fileDownloadPath(dir, file) {
 	return OC.filePath('files', 'ajax', 'download.php')+'?files='+encodeURIComponent(file)+'&dir='+encodeURIComponent(dir);
 }
 
+/** @namespace */
 var OC={
 	PERMISSION_CREATE:4,
 	PERMISSION_READ:1,
@@ -179,6 +66,7 @@ var OC={
 	PERMISSION_DELETE:8,
 	PERMISSION_SHARE:16,
 	PERMISSION_ALL:31,
+	TAG_FAVORITE: '_$!<Favorite>!$_',
 	/* jshint camelcase: false */
 	webroot:oc_webroot,
 	appswebroots:(typeof oc_appswebroots !== 'undefined') ? oc_appswebroots:false,
@@ -186,8 +74,8 @@ var OC={
 	config: window.oc_config,
 	appConfig: window.oc_appconfig || {},
 	theme: window.oc_defaults || {},
-	coreApps:['', 'admin','log','search','settings','core','3rdparty'],
-	menuSpeed: 100,
+	coreApps:['', 'admin','log','core/search','settings','core','3rdparty'],
+	menuSpeed: 50,
 
 	/**
 	 * Get an absolute url to a file in an app
@@ -228,16 +116,30 @@ var OC={
 
 	/**
 	 * Generates the absolute url for the given relative url, which can contain parameters.
+	 * Parameters will be URL encoded automatically.
 	 * @param {string} url
-	 * @param params
+	 * @param [params] params
+	 * @param [options] options
+	 * @param {bool} [options.escape=true] enable/disable auto escape of placeholders (by default enabled)
 	 * @return {string} Absolute URL for the given relative URL
 	 */
-	generateUrl: function(url, params) {
+	generateUrl: function(url, params, options) {
+		var defaultOptions = {
+				escape: true
+			},
+			allOptions = options || {};
+		_.defaults(allOptions, defaultOptions);
+
 		var _build = function (text, vars) {
+			var vars = vars || [];
 			return text.replace(/{([^{}]*)}/g,
 				function (a, b) {
-					var r = vars[b];
-					return typeof r === 'string' || typeof r === 'number' ? r : a;
+					var r = (vars[b]);
+					if(allOptions.escape) {
+						return (typeof r === 'string' || typeof r === 'number') ? encodeURIComponent(r) : encodeURIComponent(a);
+					} else {
+						return (typeof r === 'string' || typeof r === 'number') ? r : a;
+					}
 				}
 			);
 		};
@@ -245,6 +147,7 @@ var OC={
 			url = '/' + url;
 
 		}
+		// TODO save somewhere whether the webserver is able to skip the index.php to have shorter links (e.g. for sharing)
 		return OC.webroot + '/index.php' + _build(url, params);
 	},
 
@@ -308,6 +211,14 @@ var OC={
 	},
 
 	/**
+	 * Protocol that is used to access this ownCloud instance
+	 * @return {string} Used protocol
+	 */
+	getProtocol: function() {
+		return window.location.protocol.split(':')[0];
+	},
+
+	/**
 	 * get the absolute path to an image file
 	 * if no extension is given for the image, it will automatically decide
 	 * between .png and .svg based on what the browser supports
@@ -320,6 +231,24 @@ var OC={
 			file+=(OC.Util.hasSVGSupport())?'.svg':'.png';
 		}
 		return OC.filePath(app,'img',file);
+	},
+
+	/**
+	 * URI-Encodes a file path but keep the path slashes.
+	 *
+	 * @param path path
+	 * @return encoded path
+	 */
+	encodePath: function(path) {
+		if (!path) {
+			return path;
+		}
+		var parts = path.split('/');
+		var result = [];
+		for (var i = 0; i < parts.length; i++) {
+			result.push(encodeURIComponent(parts[i]));
+		}
+		return result.join('/');
 	},
 
 	/**
@@ -364,14 +293,33 @@ var OC={
 	},
 
 	/**
-	 * @todo Write the documentation
+	 * Loads translations for the given app asynchronously.
+	 *
+	 * @param {String} app app name
+	 * @param {Function} callback callback to call after loading
+	 * @return {Promise}
+	 */
+	addTranslations: function(app, callback) {
+		return OC.L10N.load(app, callback);
+	},
+
+	/**
+	 * Returns the base name of the given path.
+	 * For example for "/abc/somefile.txt" it will return "somefile.txt"
+	 *
+	 * @param {String} path
+	 * @return {String} base name
 	 */
 	basename: function(path) {
 		return path.replace(/\\/g,'/').replace( /.*\//, '' );
 	},
 
 	/**
-	 *  @todo Write the documentation
+	 * Returns the dir name of the given path.
+	 * For example for "/abc/somefile.txt" it will return "/abc"
+	 *
+	 * @param {String} path
+	 * @return {String} dir name
 	 */
 	dirname: function(path) {
 		return path.replace(/\\/g,'/').replace(/\/[^\/]*$/, '');
@@ -381,26 +329,19 @@ var OC={
 	 * Do a search query and display the results
 	 * @param {string} query the search query
 	 */
-	search: _.debounce(function(query){
-		if(query){
-			OC.addStyle('search','results');
-			$.getJSON(OC.filePath('search','ajax','search.php')+'?query='+encodeURIComponent(query), function(results){
-				OC.search.lastResults=results;
-				OC.search.showResults(results);
-			});
-		}
-	}, 500),
-	dialogs:OCdialogs,
-	mtime2date:function(mtime) {
-		mtime = parseInt(mtime,10);
-		var date = new Date(1000*mtime);
-		return date.getDate()+'.'+(date.getMonth()+1)+'.'+date.getFullYear()+', '+date.getHours()+':'+date.getMinutes();
+	search: function (query) {
+		OC.Search.search(query, null, 0, 30);
 	},
-
+	/**
+	 * Dialog helper for jquery dialogs.
+	 *
+	 * @namespace OC.dialogs
+	 */
+	dialogs:OCdialogs,
 	/**
 	 * Parses a URL query string into a JS map
 	 * @param {string} queryString query string in the format param1=1234&param2=abcde&param3=xyz
-	 * @return map containing key/values matching the URL parameters
+	 * @return {Object.<string, string>} map containing key/values matching the URL parameters
 	 */
 	parseQueryString:function(queryString){
 		var parts,
@@ -452,7 +393,7 @@ var OC={
 
 	/**
 	 * Builds a URL query from a JS map.
-	 * @param params parameter map
+	 * @param {Object.<string, string>} params map containing key/values matching the URL parameters
 	 * @return {string} String containing a URL query (without question) mark
 	 */
 	buildQueryString: function(params) {
@@ -535,11 +476,14 @@ var OC={
 	registerMenu: function($toggle, $menuEl) {
 		$menuEl.addClass('menu');
 		$toggle.on('click.menu', function(event) {
+			// prevent the link event (append anchor to URL)
+			event.preventDefault();
+
 			if ($menuEl.is(OC._currentMenu)) {
 				$menuEl.slideUp(OC.menuSpeed);
 				OC._currentMenu = null;
 				OC._currentMenuToggle = null;
-				return false;
+				return;
 			}
 			// another menu was open?
 			else if (OC._currentMenu) {
@@ -549,7 +493,6 @@ var OC={
 			$menuEl.slideToggle(OC.menuSpeed);
 			OC._currentMenu = $menuEl;
 			OC._currentMenuToggle = $toggle;
-			return false;
 		});
 	},
 
@@ -572,59 +515,143 @@ var OC={
 	 *
 	 * This is makes it possible for unit tests to
 	 * stub matchMedia (which doesn't work in PhantomJS)
-	 * @todo Write documentation
+	 * @private
 	 */
 	_matchMedia: function(media) {
 		if (window.matchMedia) {
 			return window.matchMedia(media);
 		}
 		return false;
+	},
+
+	/**
+	 * Returns the user's locale
+	 *
+	 * @return {String} locale string
+	 */
+	getLocale: function() {
+		return $('html').prop('lang');
 	}
 };
 
-OC.search.customResults={};
-OC.search.currentResult=-1;
-OC.search.lastQuery='';
-OC.search.lastResults={};
-//translations for result type ids, can be extended by apps
-OC.search.resultTypes={
-	file: t('core','File'),
-	folder: t('core','Folder'),
-	image: t('core','Image'),
-	audio: t('core','Audio')
+/**
+ * @namespace OC.Plugins
+ */
+OC.Plugins = {
+	/**
+	 * @type Array.<OC.Plugin>
+	 */
+	_plugins: {},
+
+	/**
+	 * Register plugin
+	 *
+	 * @param {String} targetName app name / class name to hook into
+	 * @param {OC.Plugin} plugin
+	 */
+	register: function(targetName, plugin) {
+		var plugins = this._plugins[targetName];
+		if (!plugins) {
+			plugins = this._plugins[targetName] = [];
+		}
+		plugins.push(plugin);
+	},
+
+	/**
+	 * Returns all plugin registered to the given target
+	 * name / app name / class name.
+	 *
+	 * @param {String} targetName app name / class name to hook into
+	 * @return {Array.<OC.Plugin>} array of plugins
+	 */
+	getPlugins: function(targetName) {
+		return this._plugins[targetName] || [];
+	},
+
+	/**
+	 * Call attach() on all plugins registered to the given target name.
+	 *
+	 * @param {String} targetName app name / class name
+	 * @param {Object} object to be extended
+	 * @param {Object} [options] options
+	 */
+	attach: function(targetName, targetObject, options) {
+		var plugins = this.getPlugins(targetName);
+		for (var i = 0; i < plugins.length; i++) {
+			if (plugins[i].attach) {
+				plugins[i].attach(targetObject, options);
+			}
+		}
+	},
+
+	/**
+	 * Call detach() on all plugins registered to the given target name.
+	 *
+	 * @param {String} targetName app name / class name
+	 * @param {Object} object to be extended
+	 * @param {Object} [options] options
+	 */
+	detach: function(targetName, targetObject, options) {
+		var plugins = this.getPlugins(targetName);
+		for (var i = 0; i < plugins.length; i++) {
+			if (plugins[i].detach) {
+				plugins[i].detach(targetObject, options);
+			}
+		}
+	},
+
+	/**
+	 * Plugin
+	 *
+	 * @todo make this a real class in the future
+	 * @typedef {Object} OC.Plugin
+	 *
+	 * @property {String} name plugin name
+	 * @property {Function} attach function that will be called when the
+	 * plugin is attached
+	 * @property {Function} [detach] function that will be called when the
+	 * plugin is detached
+	 */
+
 };
+
+/**
+ * @namespace OC.search
+ */
+OC.search.customResults = {};
+/**
+ * @deprecated use get/setFormatter() instead
+ */
+OC.search.resultTypes = {};
+
 OC.addStyle.loaded=[];
 OC.addScript.loaded=[];
 
 /**
- * @todo Write documentation
+ * A little class to manage a status field for a "saving" process.
+ * It can be used to display a starting message (e.g. "Saving...") and then
+ * replace it with a green success message or a red error message.
+ *
+ * @namespace OC.msg
  */
-OC.msg={
+OC.msg = {
 	/**
-	 * @param selector
-	 * @todo Write documentation
+	 * Displayes a "Saving..." message in the given message placeholder
+	 *
+	 * @param {Object} selector	Placeholder to display the message in
 	 */
-	startSaving:function(selector){
-		OC.msg.startAction(selector, t('core', 'Saving...'));
+	startSaving: function(selector) {
+		this.startAction(selector, t('core', 'Saving...'));
 	},
 
 	/**
-	 * @param selector
-	 * @param data
-	 * @todo Write documentation
+	 * Displayes a custom message in the given message placeholder
+	 *
+	 * @param {Object} selector	Placeholder to display the message in
+	 * @param {string} message	Plain text message to display (no HTML allowed)
 	 */
-	finishedSaving:function(selector, data){
-		OC.msg.finishedAction(selector, data);
-	},
-
-	/**
-	 * @param selector
-	 * @param {string} message Message to display
-	 * @todo WRite documentation
-	 */
-	startAction:function(selector, message){
-		$(selector)
-			.html( message )
+	startAction: function(selector, message) {
+		$(selector).text(message)
 			.removeClass('success')
 			.removeClass('error')
 			.stop(true, true)
@@ -632,34 +659,75 @@ OC.msg={
 	},
 
 	/**
-	 * @param selector
-	 * @param data
-	 * @todo Write documentation
+	 * Displayes an success/error message in the given selector
+	 *
+	 * @param {Object} selector	Placeholder to display the message in
+	 * @param {Object} response	Response of the server
+	 * @param {Object} response.data	Data of the servers response
+	 * @param {string} response.data.message	Plain text message to display (no HTML allowed)
+	 * @param {string} response.status	is being used to decide whether the message
+	 * is displayed as an error/success
 	 */
-	finishedAction:function(selector, data){
-		if( data.status === "success" ){
-			$(selector).html( data.data.message )
-					.addClass('success')
-					.removeClass('error')
-					.stop(true, true)
-					.delay(3000)
-					.fadeOut(900)
-					.show();
-		}else{
-			$(selector).html( data.data.message )
-					.addClass('error')
-					.removeClass('success')
-					.show();
+	finishedSaving: function(selector, response) {
+		this.finishedAction(selector, response);
+	},
+
+	/**
+	 * Displayes an success/error message in the given selector
+	 *
+	 * @param {Object} selector	Placeholder to display the message in
+	 * @param {Object} response	Response of the server
+	 * @param {Object} response.data Data of the servers response
+	 * @param {string} response.data.message Plain text message to display (no HTML allowed)
+	 * @param {string} response.status is being used to decide whether the message
+	 * is displayed as an error/success
+	 */
+	finishedAction: function(selector, response) {
+		if (response.status === "success") {
+			this.finishedSuccess(selector, response.data.message);
+		} else {
+			this.finishedError(selector, response.data.message);
 		}
+	},
+
+	/**
+	 * Displayes an success message in the given selector
+	 *
+	 * @param {Object} selector Placeholder to display the message in
+	 * @param {string} message Plain text success message to display (no HTML allowed)
+	 */
+	finishedSuccess: function(selector, message) {
+		$(selector).text(message)
+			.addClass('success')
+			.removeClass('error')
+			.stop(true, true)
+			.delay(3000)
+			.fadeOut(900)
+			.show();
+	},
+
+	/**
+	 * Displayes an error message in the given selector
+	 *
+	 * @param {Object} selector Placeholder to display the message in
+	 * @param {string} message Plain text error message to display (no HTML allowed)
+	 */
+	finishedError: function(selector, message) {
+		$(selector).text(message)
+			.addClass('error')
+			.removeClass('success')
+			.show();
 	}
 };
 
 /**
  * @todo Write documentation
+ * @namespace
  */
 OC.Notification={
 	queuedNotifications: [],
 	getDefaultNotificationFunction: null,
+	notificationTimer: 0,
 
 	/**
 	 * @param callback
@@ -722,6 +790,42 @@ OC.Notification={
 		}
 	},
 
+
+	/**
+	 * Shows a notification that disappears after x seconds, default is
+	 * 7 seconds
+	 * @param {string} text Message to show
+	 * @param {array} [options] options array
+	 * @param {int} [options.timeout=7] timeout in seconds, if this is 0 it will show the message permanently
+	 * @param {boolean} [options.isHTML=false] an indicator for HTML notifications (true) or text (false)
+	 */
+	showTemporary: function(text, options) {
+		var defaults = {
+				isHTML: false,
+				timeout: 7
+			},
+			options = options || {};
+		// merge defaults with passed in options
+		_.defaults(options, defaults);
+
+		// clear previous notifications
+		OC.Notification.hide();
+		if(OC.Notification.notificationTimer) {
+			clearTimeout(OC.Notification.notificationTimer);
+		}
+
+		if(options.isHTML) {
+			OC.Notification.showHtml(text);
+		} else {
+			OC.Notification.show(text);
+		}
+
+		if(options.timeout > 0) {
+			// register timeout to vanish notification
+			OC.Notification.notificationTimer = setTimeout(OC.Notification.hide, (options.timeout * 1000));
+		}
+	},
+
 	/**
 	 * Returns whether a notification is hidden.
 	 * @return {boolean}
@@ -732,7 +836,12 @@ OC.Notification={
 };
 
 /**
- * @todo Write documentation
+ * Breadcrumb class
+ *
+ * @namespace
+ *
+ * @deprecated will be replaced by the breadcrumb implementation
+ * of the files app in the future
  */
 OC.Breadcrumb={
 	container:null,
@@ -846,6 +955,7 @@ OC.Breadcrumb={
 if(typeof localStorage !=='undefined' && localStorage !== null){
 	/**
 	 * User and instance aware localstorage
+	 * @namespace
 	 */
 	OC.localStorage={
 		namespace:'oc_'+OC.currentUser+'_'+OC.webroot+'_',
@@ -970,6 +1080,12 @@ function object(o) {
 function initCore() {
 
 	/**
+	 * Set users locale to moment.js as soon as possible
+	 */
+	moment.locale(OC.getLocale());
+
+
+	/**
 	 * Calls the server periodically to ensure that session doesn't
 	 * time out
 	 */
@@ -1006,77 +1122,6 @@ function initCore() {
 	}else{
 		SVGSupport.checkMimeType();
 	}
-	$('form.searchbox').submit(function(event){
-		event.preventDefault();
-	});
-	$('#searchbox').keyup(function(event){
-		if(event.keyCode===13){//enter
-			if(OC.search.currentResult>-1){
-				var result=$('#searchresults tr.result a')[OC.search.currentResult];
-				window.location = $(result).attr('href');
-			}
-		}else if(event.keyCode===38){//up
-			if(OC.search.currentResult>0){
-				OC.search.currentResult--;
-				OC.search.renderCurrent();
-			}
-		}else if(event.keyCode===40){//down
-			if(OC.search.lastResults.length>OC.search.currentResult+1){
-				OC.search.currentResult++;
-				OC.search.renderCurrent();
-			}
-		}else if(event.keyCode===27){//esc
-			OC.search.hide();
-			if (FileList && typeof FileList.unfilter === 'function') { //TODO add hook system
-				FileList.unfilter();
-			}
-		}else{
-			var query=$('#searchbox').val();
-			if(OC.search.lastQuery!==query){
-				OC.search.lastQuery=query;
-				OC.search.currentResult=-1;
-				if (FileList && typeof FileList.filter === 'function') { //TODO add hook system
-						FileList.filter(query);
-				}
-				if(query.length>2){
-					OC.search(query);
-				}else{
-					if(OC.search.hide){
-						OC.search.hide();
-					}
-				}
-			}
-		}
-	});
-
-	var setShowPassword = function(input, label) {
-		input.showPassword().keyup();
-	};
-	setShowPassword($('#adminpass'), $('label[for=show]'));
-	setShowPassword($('#pass2'), $('label[for=personal-show]'));
-	setShowPassword($('#dbpass'), $('label[for=dbpassword]'));
-
-	var checkShowCredentials = function() {
-		var empty = false;
-		$('input#user, input#password').each(function() {
-			if ($(this).val() === '') {
-				empty = true;
-			}
-		});
-		if(empty) {
-			$('#submit').fadeOut();
-			$('#remember_login').hide();
-			$('#remember_login+label').fadeOut();
-		} else {
-			$('#submit').fadeIn();
-			$('#remember_login').show();
-			$('#remember_login+label').fadeIn();
-		}
-	};
-	// hide log in button etc. when form fields not filled
-	// commented out due to some browsers having issues with it
-	// checkShowCredentials();
-	// $('input#user, input#password').keyup(checkShowCredentials);
 
 	// user menu
 	$('#settings #expand').keydown(function(event) {
@@ -1097,15 +1142,16 @@ function initCore() {
 	});
 
 	// all the tipsy stuff needs to be here (in reverse order) to work
-	$('.displayName .action').tipsy({gravity:'se', fade:true, live:true});
-	$('.password .action').tipsy({gravity:'se', fade:true, live:true});
-	$('#upload').tipsy({gravity:'w', fade:true});
-	$('.selectedActions a').tipsy({gravity:'s', fade:true, live:true});
-	$('a.action.delete').tipsy({gravity:'e', fade:true, live:true});
-	$('a.action').tipsy({gravity:'s', fade:true, live:true});
-	$('td .modified').tipsy({gravity:'s', fade:true, live:true});
-	$('td.lastLogin').tipsy({gravity:'s', fade:true, html:true});
-	$('input').tipsy({gravity:'w', fade:true});
+	$('.displayName .action').tipsy({gravity:'se', live:true});
+	$('.password .action').tipsy({gravity:'se', live:true});
+	$('#upload').tipsy({gravity:'w'});
+	$('.selectedActions a').tipsy({gravity:'s', live:true});
+	$('a.action.delete').tipsy({gravity:'e', live:true});
+	$('a.action').tipsy({gravity:'s', live:true});
+	$('td .modified').tipsy({gravity:'s', live:true});
+	$('td.lastLogin').tipsy({gravity:'s', html:true});
+	$('input').tipsy({gravity:'w'});
+	$('.extra-data').tipsy({gravity:'w', live:true});
 
 	// toggle for menus
 	$(document).on('mouseup.closemenus', function(event) {
@@ -1152,6 +1198,20 @@ function initCore() {
 
 	setupMainMenu();
 
+	// move triangle of apps dropdown to align with app name triangle
+	// 2 is the additional offset between the triangles
+	if($('#navigation').length) {
+		$('#header #owncloud + .menutoggle').one('click', function(){
+			var caretPosition = $('.header-appname + .icon-caret').offset().left - 2;
+			if(caretPosition > 255) {
+				// if the app name is longer than the menu, just put the triangle in the middle
+				return;
+			} else {
+				$('head').append('<style>#navigation:after { left: '+ caretPosition +'px; }</style>');
+			}
+		});
+	}
+
 	// just add snapper for logged in users
 	if($('#app-navigation').length && !$('html').hasClass('lte9')) {
 
@@ -1171,7 +1231,7 @@ function initCore() {
 		});
 		// close sidebar when switching navigation entry
 		var $appNavigation = $('#app-navigation');
-		$appNavigation.delegate('a', 'click', function(event) {
+		$appNavigation.delegate('a, :button', 'click', function(event) {
 			var $target = $(event.target);
 			// don't hide navigation when changing settings or adding things
 			if($target.is('.app-navigation-noclose') ||
@@ -1203,6 +1263,33 @@ function initCore() {
 		// initial call
 		toggleSnapperOnSize();
 
+		// adjust controls bar width
+		var adjustControlsWidth = function() {
+			if($('#controls').length) {
+				var controlsWidth;
+				// if there is a scrollbar …
+				if($('#app-content').get(0).scrollHeight > $('#app-content').height()) {
+					if($(window).width() > 768) {
+						controlsWidth = $('#content').width() - $('#app-navigation').width() - getScrollBarWidth();
+					} else {
+						controlsWidth = $('#content').width() - getScrollBarWidth();
+					}
+				} else { // if there is none
+					if($(window).width() > 768) {
+						controlsWidth = $('#content').width() - $('#app-navigation').width();
+					} else {
+						controlsWidth = $('#content').width();
+					}
+				}
+				$('#controls').css('width', controlsWidth);
+				$('#controls').css('min-width', controlsWidth);
+			}
+		};
+
+		$(window).resize(_.debounce(adjustControlsWidth, 250));
+
+		$('body').delegate('#app-content', 'apprendered', adjustControlsWidth);
+
 	}
 
 }
@@ -1225,7 +1312,7 @@ $.fn.filterAttr = function(attr_name, attr_value) {
 function humanFileSize(size, skipSmallSizes) {
 	var humanList = ['B', 'kB', 'MB', 'GB', 'TB'];
 	// Calculate Log with base 1024: size = 1024 ** order
-	var order = size?Math.floor(Math.log(size) / Math.log(1024)):0;
+	var order = size > 0 ? Math.floor(Math.log(size) / Math.log(1024)) : 0;
 	// Stay in range of the byte sizes that are defined
 	order = Math.min(humanList.length - 1, order);
 	var readableFormat = humanList[order];
@@ -1248,14 +1335,11 @@ function humanFileSize(size, skipSmallSizes) {
 
 /**
  * Format an UNIX timestamp to a human understandable format
- * @param {number} date UNIX timestamp
+ * @param {number} timestamp UNIX timestamp
  * @return {string} Human readable format
  */
-function formatDate(date){
-	if(typeof date=='number'){
-		date=new Date(date);
-	}
-	return $.datepicker.formatDate(datepickerFormatDate, date)+' '+date.getHours()+':'+((date.getMinutes()<10)?'0':'')+date.getMinutes();
+function formatDate(timestamp){
+	return OC.Util.formatDate(timestamp);
 }
 
 //
@@ -1276,30 +1360,38 @@ function getURLParameter(name) {
  * @param {number} timestamp A Unix timestamp
  */
 function relative_modified_date(timestamp) {
-	var timeDiff = Math.round((new Date()).getTime() / 1000) - timestamp;
-	var diffMinutes = Math.round(timeDiff/60);
-	var diffHours = Math.round(diffMinutes/60);
-	var diffDays = Math.round(diffHours/24);
-	var diffMonths = Math.round(diffDays/31);
-	if(timeDiff < 60) { return t('core','seconds ago'); }
-	else if(timeDiff < 3600) { return n('core','%n minute ago', '%n minutes ago', diffMinutes); }
-	else if(timeDiff < 86400) { return n('core', '%n hour ago', '%n hours ago', diffHours); }
-	else if(timeDiff < 86400) { return t('core','today'); }
-	else if(timeDiff < 172800) { return t('core','yesterday'); }
-	else if(timeDiff < 2678400) { return n('core', '%n day ago', '%n days ago', diffDays); }
-	else if(timeDiff < 5184000) { return t('core','last month'); }
-	else if(timeDiff < 31556926) { return n('core', '%n month ago', '%n months ago', diffMonths); }
-	else if(timeDiff < 63113852) { return t('core','last year'); }
-	else { return t('core','years ago'); }
+	/*
+	 Were multiplying by 1000 to bring the timestamp back to its original value
+	 per https://github.com/owncloud/core/pull/10647#discussion_r16790315
+	  */
+	return OC.Util.relativeModifiedDate(timestamp * 1000);
 }
 
 /**
  * Utility functions
+ * @namespace
  */
 OC.Util = {
 	// TODO: remove original functions from global namespace
 	humanFileSize: humanFileSize,
-	formatDate: formatDate,
+
+	/**
+	 * @param timestamp
+	 * @param format
+	 * @returns {string} timestamp formatted as requested
+	 */
+	formatDate: function (timestamp, format) {
+		format = format || "LLL";
+		return moment(timestamp).format(format);
+	},
+
+	/**
+	 * @param timestamp
+	 * @returns {string} human readable difference from now
+	 */
+	relativeModifiedDate: function (timestamp) {
+		return moment(timestamp).fromNow();
+	},
 	/**
 	 * Returns whether the browser supports SVG
 	 * @return {boolean} true if the browser supports SVG, false otherwise
@@ -1371,13 +1463,65 @@ OC.Util = {
 		// FIXME: likely to break when crossing DST
 		// would be better to use a library like momentJS
 		return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+	},
+
+	_chunkify: function(t) {
+		// Adapted from http://my.opera.com/GreyWyvern/blog/show.dml/1671288
+		var tz = [], x = 0, y = -1, n = 0, code, c;
+
+		while (x < t.length) {
+			c = t.charAt(x);
+			// only include the dot in strings
+			var m = ((!n && c === '.') || (c >= '0' && c <= '9'));
+			if (m !== n) {
+				// next chunk
+				y++;
+				tz[y] = '';
+				n = m;
+			}
+			tz[y] += c;
+			x++;
+		}
+		return tz;
+	},
+	/**
+	 * Compare two strings to provide a natural sort
+	 * @param a first string to compare
+	 * @param b second string to compare
+	 * @return -1 if b comes before a, 1 if a comes before b
+	 * or 0 if the strings are identical
+	 */
+	naturalSortCompare: function(a, b) {
+		var x;
+		var aa = OC.Util._chunkify(a);
+		var bb = OC.Util._chunkify(b);
+
+		for (x = 0; aa[x] && bb[x]; x++) {
+			if (aa[x] !== bb[x]) {
+				var aNum = Number(aa[x]), bNum = Number(bb[x]);
+				// note: == is correct here
+				if (aNum == aa[x] && bNum == bb[x]) {
+					return aNum - bNum;
+				} else {
+					// Forcing 'en' locale to match the server-side locale which is
+					// always 'en'.
+					//
+					// Note: This setting isn't supported by all browsers but for the ones
+					// that do there will be more consistency between client-server sorting
+					return aa[x].localeCompare(bb[x], 'en');
+				}
+			}
+		}
+		return aa.length - bb.length;
 	}
-};
+}
 
 /**
  * Utility class for the history API,
  * includes fallback to using the URL hash when
  * the browser doesn't support the history API.
+ *
+ * @namespace
  */
 OC.Util.History = {
 	_handlers: [],
@@ -1537,6 +1681,7 @@ OC.set=function(name, value) {
 
 /**
  * Namespace for apps
+ * @namespace OCA
  */
 window.OCA = {};
 
@@ -1569,3 +1714,31 @@ jQuery.fn.selectRange = function(start, end) {
 jQuery.fn.exists = function(){
 	return this.length > 0;
 };
+
+function getScrollBarWidth() {
+	var inner = document.createElement('p');
+	inner.style.width = "100%";
+	inner.style.height = "200px";
+
+	var outer = document.createElement('div');
+	outer.style.position = "absolute";
+	outer.style.top = "0px";
+	outer.style.left = "0px";
+	outer.style.visibility = "hidden";
+	outer.style.width = "200px";
+	outer.style.height = "150px";
+	outer.style.overflow = "hidden";
+	outer.appendChild (inner);
+
+	document.body.appendChild (outer);
+	var w1 = inner.offsetWidth;
+	outer.style.overflow = 'scroll';
+	var w2 = inner.offsetWidth;
+	if(w1 === w2) {
+		w2 = outer.clientWidth;
+	}
+
+	document.body.removeChild (outer);
+
+	return (w1 - w2);
+}

@@ -22,57 +22,68 @@
 
 namespace Test\Files;
 
-class Mapper extends \PHPUnit_Framework_TestCase {
+class Mapper extends \Test\TestCase {
 
 	/**
 	 * @var \OC\Files\Mapper
 	 */
 	private $mapper = null;
 
-	public function setUp() {
+	protected function setUp() {
+		parent::setUp();
 		$this->mapper = new \OC\Files\Mapper('D:/');
 	}
 
-	public function testSlugifyPath() {
-		// with extension
-		$this->assertEquals('D:/text.txt', $this->mapper->slugifyPath('D:/text.txt'));
-		$this->assertEquals('D:/text-2.txt', $this->mapper->slugifyPath('D:/text.txt', 2));
-		$this->assertEquals('D:/a/b/text.txt', $this->mapper->slugifyPath('D:/a/b/text.txt'));
+	public function slugifyPathData() {
+		return array(
+			// with extension
+			array('D:/text.txt', 'D:/text.txt'),
+			array('D:/text-2.txt', 'D:/text.txt', 2),
+			array('D:/a/b/text.txt', 'D:/a/b/text.txt'),
 
-		// without extension
-		$this->assertEquals('D:/text', $this->mapper->slugifyPath('D:/text'));
-		$this->assertEquals('D:/text-2', $this->mapper->slugifyPath('D:/text', 2));
-		$this->assertEquals('D:/a/b/text', $this->mapper->slugifyPath('D:/a/b/text'));
+			// without extension
+			array('D:/text', 'D:/text'),
+			array('D:/text-2', 'D:/text', 2),
+			array('D:/a/b/text', 'D:/a/b/text'),
 
-		// with double dot
-		$this->assertEquals('D:/text.text.txt', $this->mapper->slugifyPath('D:/text.text.txt'));
-		$this->assertEquals('D:/text.text-2.txt', $this->mapper->slugifyPath('D:/text.text.txt', 2));
-		$this->assertEquals('D:/a/b/text.text.txt', $this->mapper->slugifyPath('D:/a/b/text.text.txt'));
-			
-		// foldername and filename with periods
-		$this->assertEquals('D:/folder.name.with.periods', $this->mapper->slugifyPath('D:/folder.name.with.periods'));
-		$this->assertEquals('D:/folder.name.with.periods/test-2.txt', $this->mapper->slugifyPath('D:/folder.name.with.periods/test.txt', 2));
-		$this->assertEquals('D:/folder.name.with.periods/test.txt', $this->mapper->slugifyPath('D:/folder.name.with.periods/test.txt'));
+			// with double dot
+			array('D:/text.text.txt', 'D:/text.text.txt'),
+			array('D:/text.text-2.txt', 'D:/text.text.txt', 2),
+			array('D:/a/b/text.text.txt', 'D:/a/b/text.text.txt'),
 
-		// foldername and filename with periods and spaces
-		$this->assertEquals('D:/folder.name.with.peri-ods', $this->mapper->slugifyPath('D:/folder.name.with.peri ods'));
-		$this->assertEquals('D:/folder.name.with.peri-ods/te-st-2.t-x-t', $this->mapper->slugifyPath('D:/folder.name.with.peri ods/te st.t x t', 2));
-		$this->assertEquals('D:/folder.name.with.peri-ods/te-st.t-x-t', $this->mapper->slugifyPath('D:/folder.name.with.peri ods/te st.t x t'));
+			// foldername and filename with periods
+			array('D:/folder.name.with.periods', 'D:/folder.name.with.periods'),
+			array('D:/folder.name.with.periods/test-2.txt', 'D:/folder.name.with.periods/test.txt', 2),
+			array('D:/folder.name.with.periods/test.txt', 'D:/folder.name.with.periods/test.txt'),
 
-		// files with special characters
-		$this->assertEquals('D:/' . md5('ありがとう'), $this->mapper->slugifyPath('D:/ありがとう'));
-		$this->assertEquals('D:/' . md5('ありがとう') . '/issue6722.txt', $this->mapper->slugifyPath('D:/ありがとう/issue6722.txt'));
+			// foldername and filename with periods and spaces
+			array('D:/folder.name.with.peri-ods', 'D:/folder.name.with.peri ods'),
+			array('D:/folder.name.with.peri-ods/te-st-2.t-x-t', 'D:/folder.name.with.peri ods/te st.t x t', 2),
+			array('D:/folder.name.with.peri-ods/te-st.t-x-t', 'D:/folder.name.with.peri ods/te st.t x t'),
 
-		// blacklisted files
-		$this->assertEquals('D:/' . md5('.htaccess'), $this->mapper->slugifyPath('D:/.htaccess'));
-		$this->assertEquals('D:/' . md5('.htaccess.'), $this->mapper->slugifyPath('D:/.htaccess.'));
-		$this->assertEquals('D:/' . md5('.htAccess'), $this->mapper->slugifyPath('D:/.htAccess'));
-		$this->assertEquals('D:/' . md5('.htAccess\\…\\') . '/a', $this->mapper->slugifyPath('D:/.htAccess\…\/とa'));
-		$this->assertEquals('D:/' . md5('.htaccess-'), $this->mapper->slugifyPath('D:/.htaccess-'));
-		$this->assertEquals('D:/' . md5('.htaあccess'), $this->mapper->slugifyPath('D:/.htaあccess'));
-		$this->assertEquals('D:/' . md5(' .htaccess'), $this->mapper->slugifyPath('D:/ .htaccess'));
-		$this->assertEquals('D:/' . md5('.htaccess '), $this->mapper->slugifyPath('D:/.htaccess '));
-		$this->assertEquals('D:/' . md5(' .htaccess '), $this->mapper->slugifyPath('D:/ .htaccess '));
+			/**
+			 * If a foldername is empty, after we stripped out some unicode and other characters,
+			 * the resulting name must be reproducable otherwise uploading a file into that folder
+			 * will not write the file into the same folder.
+			 */
+			array('D:/' . md5('ありがとう'), 'D:/ありがとう'),
+			array('D:/' . md5('ありがとう') . '/issue6722.txt', 'D:/ありがとう/issue6722.txt'),
+			array('D:/' . md5('.htaccess'), 'D:/.htaccess'),
+			array('D:/' . md5('.htaccess.'), 'D:/.htaccess.'),
+			array('D:/' . md5('.htAccess'), 'D:/.htAccess'),
+			array('D:/' . md5('.htAccess\\…\\') . '/a', 'D:/.htAccess\…\/とa'),
+			array('D:/' . md5('.htaccess-'), 'D:/.htaccess-'),
+			array('D:/' . md5('.htaあccess'), 'D:/.htaあccess'),
+			array('D:/' . md5(' .htaccess'), 'D:/ .htaccess'),
+			array('D:/' . md5('.htaccess '), 'D:/.htaccess '),
+			array('D:/' . md5(' .htaccess '), 'D:/ .htaccess '),
+		);
+	}
 
+	/**
+	 * @dataProvider slugifyPathData
+	 */
+	public function testSlugifyPath($slug, $path, $index = null) {
+		$this->assertEquals($slug, $this->mapper->slugifyPath($path, $index));
 	}
 }

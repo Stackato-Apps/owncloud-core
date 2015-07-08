@@ -6,23 +6,28 @@
  * See the COPYING-README file.
  */
 
-class TestHTTPHelper extends \PHPUnit_Framework_TestCase {
+class TestHTTPHelper extends \Test\TestCase {
 
-	/** @var \OC\AllConfig*/
+	/** @var \OCP\IConfig*/
 	private $config;
 	/** @var \OC\HTTPHelper */
 	private $httpHelperMock;
+	/** @var \OCP\Http\Client\IClientService */
+	private $clientService;
 
-	function setUp() {
-		$this->config = $this->getMockBuilder('\OC\AllConfig')
+	protected function setUp() {
+		parent::setUp();
+
+		$this->config = $this->getMockBuilder('\OCP\IConfig')
 			->disableOriginalConstructor()->getMock();
+		$this->clientService = $this->getMock('\OCP\Http\Client\IClientService');
 		$this->httpHelperMock = $this->getMockBuilder('\OC\HTTPHelper')
-			->setConstructorArgs(array($this->config))
+			->setConstructorArgs(array($this->config, $this->clientService))
 			->setMethods(array('getHeaders'))
 			->getMock();
 	}
 
-	public function testIsHTTPProvider() {
+	public function isHttpTestData() {
 		return array(
 			array('http://wwww.owncloud.org/enterprise/', true),
 			array('https://wwww.owncloud.org/enterprise/', true),
@@ -36,53 +41,78 @@ class TestHTTPHelper extends \PHPUnit_Framework_TestCase {
 	}
 
 	/**
-	 * Note: Not using a dataprovider because onConsecutiveCalls expects not
-	 * an array but the function arguments directly
-	 */
-	public function testGetFinalLocationOfURLValid() {
-		$url = 'https://www.owncloud.org/enterprise/';
-		$expected = 'https://www.owncloud.com/enterprise/';
-		$this->httpHelperMock->expects($this->any())
-			->method('getHeaders')
-			->will($this->onConsecutiveCalls(
-				array('Location' => 'http://www.owncloud.com/enterprise/'),
-				array('Location' => 'https://www.owncloud.com/enterprise/')
-			));
-		$result = $this->httpHelperMock->getFinalLocationOfURL($url);
-		$this->assertSame($expected, $result);
-	}
-
-	/**
-	 * Note: Not using a dataprovider because onConsecutiveCalls expects not
-	 * an array but the function arguments directly
-	 */
-	public function testGetFinalLocationOfURLInvalid() {
-		$url = 'https://www.owncloud.org/enterprise/';
-		$expected = 'http://www.owncloud.com/enterprise/';
-		$this->httpHelperMock->expects($this->any())
-			->method('getHeaders')
-			->will($this->onConsecutiveCalls(
-				array('Location' => 'http://www.owncloud.com/enterprise/'),
-				array('Location' => 'file://etc/passwd'),
-				array('Location' => 'http://www.example.com/')
-			));
-		$result = $this->httpHelperMock->getFinalLocationOfURL($url);
-		$this->assertSame($expected, $result);
-	}
-
-	/**
-	 * @expectedException \Exception
-	 * @expectedExceptionMessage URL must begin with HTTPS or HTTP.
-	 */
-	public function testGetFinalLocationOfURLException() {
-		$this->httpHelperMock->getFinalLocationOfURL('file://etc/passwd');
-	}
-
-	/**
-	 * @dataProvider testIsHTTPProvider
+	 * @dataProvider isHttpTestData
 	 */
 	public function testIsHTTP($url, $expected) {
 			$this->assertSame($expected, $this->httpHelperMock->isHTTPURL($url));
+	}
+
+	public function testPostSuccess() {
+		$client = $this->getMockBuilder('\OCP\Http\Client\IClient')
+			->disableOriginalConstructor()->getMock();
+		$this->clientService
+			->expects($this->once())
+			->method('newClient')
+			->will($this->returnValue($client));
+		$response = $this->getMockBuilder('\OCP\Http\Client\IResponse')
+			->disableOriginalConstructor()->getMock();
+		$client
+			->expects($this->once())
+			->method('post')
+			->with(
+				'https://owncloud.org',
+				[
+					'body' => [
+						'Foo' => 'Bar',
+					],
+					'connect_timeout' => 10,
+
+				]
+			)
+			->will($this->returnValue($response));
+		$response
+			->expects($this->once())
+			->method('getBody')
+			->will($this->returnValue('Body of the requested page'));
+
+
+		$response = $this->httpHelperMock->post('https://owncloud.org', ['Foo' => 'Bar']);
+		$expected = [
+			'success' => true,
+			'result' => 'Body of the requested page'
+		];
+		$this->assertSame($expected, $response);
+	}
+
+	public function testPostException() {
+		$client = $this->getMockBuilder('\OCP\Http\Client\IClient')
+			->disableOriginalConstructor()->getMock();
+		$this->clientService
+			->expects($this->once())
+			->method('newClient')
+			->will($this->returnValue($client));
+		$client
+			->expects($this->once())
+			->method('post')
+			->with(
+				'https://owncloud.org',
+				[
+					'body' => [
+						'Foo' => 'Bar',
+					],
+					'connect_timeout' => 10,
+
+				]
+			)
+			->will($this->throwException(new \Exception('Something failed')));
+
+
+		$response = $this->httpHelperMock->post('https://owncloud.org', ['Foo' => 'Bar']);
+		$expected = [
+			'success' => false,
+			'result' => 'Something failed'
+		];
+		$this->assertSame($expected, $response);
 	}
 
 }

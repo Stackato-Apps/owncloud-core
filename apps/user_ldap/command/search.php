@@ -1,9 +1,23 @@
 <?php
 /**
- * Copyright (c) 2014 Arthur Schiwon <blizzz@owncloud.com>
- * This file is licensed under the Affero General Public License version 3 or
- * later.
- * See the COPYING-README file.
+ * @author Arthur Schiwon <blizzz@owncloud.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
  */
 
 namespace OCA\user_ldap\Command;
@@ -18,8 +32,20 @@ use OCA\user_ldap\User_Proxy;
 use OCA\user_ldap\Group_Proxy;
 use OCA\user_ldap\lib\Helper;
 use OCA\user_ldap\lib\LDAP;
+use OCP\IConfig;
 
 class Search extends Command {
+	/** @var \OCP\IConfig */
+	protected $ocConfig;
+
+	/**
+	 * @param \OCP\IConfig $ocConfig
+	 */
+	public function __construct(IConfig $ocConfig) {
+		$this->ocConfig = $ocConfig;
+		parent::__construct();
+	}
+
 	protected function configure() {
 		$this
 			->setName('ldap:search')
@@ -87,7 +113,7 @@ class Search extends Command {
 			$getMethod = 'getGroups';
 			$printID = false;
 		} else {
-			$proxy = new User_Proxy($configPrefixes, $ldapWrapper);
+			$proxy = new User_Proxy($configPrefixes, $ldapWrapper, $this->ocConfig);
 			$getMethod = 'getDisplayNames';
 			$printID = true;
 		}

@@ -1,33 +1,34 @@
 <?php
 /**
- * ownCloud
+ * @author Björn Schießle <schiessle@owncloud.com>
+ * @author Joas Schilling <nickvergessen@owncloud.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
  *
- * @author Bjoern Schiessle
- * @copyright 2014 Bjoern Schiessle <schiessle@owncloud.com>
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE
- * License as published by the Free Software Foundation; either
- * version 3 of the License, or any later version.
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
  *
- * This library is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU AFFERO GENERAL PUBLIC LICENSE for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU Affero General Public
- * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
  *
  */
 
-require_once __DIR__ . '/base.php';
-
 use OCA\Files\Share;
+use OCA\Files_sharing\Tests\TestCase;
 
 /**
  * Class Test_Files_Sharing
  */
-class Test_Files_Sharing_Backend extends Test_Files_Sharing_Base {
+class Test_Files_Sharing_Backend extends TestCase {
 
 	const TEST_FOLDER_NAME = '/folder_share_api_test';
 
@@ -35,7 +36,7 @@ class Test_Files_Sharing_Backend extends Test_Files_Sharing_Base {
 	public $subfolder;
 	public $subsubfolder;
 
-	function setUp() {
+	protected function setUp() {
 		parent::setUp();
 
 		$this->folder = self::TEST_FOLDER_NAME;
@@ -54,7 +55,7 @@ class Test_Files_Sharing_Backend extends Test_Files_Sharing_Base {
 		$this->view->file_put_contents($this->folder . $this->subfolder . $this->subsubfolder . $this->filename, $this->data);
 	}
 
-	function tearDown() {
+	protected function tearDown() {
 		$this->view->unlink($this->filename);
 		$this->view->deleteAll($this->folder);
 

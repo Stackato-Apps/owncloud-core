@@ -9,7 +9,18 @@
 
 namespace Test\User;
 
-class Manager extends \PHPUnit_Framework_TestCase {
+class Manager extends \Test\TestCase {
+	public function testGetBackends() {
+		$userDummyBackend = $this->getMock('\OC_User_Dummy');
+		$manager = new \OC\User\Manager();
+		$manager->registerBackend($userDummyBackend);
+		$this->assertEquals([$userDummyBackend], $manager->getBackends());
+		$dummyDatabaseBackend = $this->getMock('\OC_User_Database');
+		$manager->registerBackend($dummyDatabaseBackend);
+		$this->assertEquals([$userDummyBackend, $dummyDatabaseBackend], $manager->getBackends());
+	}
+
+
 	public function testUserExistsSingleBackendExists() {
 		/**
 		 * @var \OC_User_Dummy | \PHPUnit_Framework_MockObject_MockObject $backend
@@ -369,6 +380,10 @@ class Manager extends \PHPUnit_Framework_TestCase {
 			->with(\OC_USER_BACKEND_COUNT_USERS)
 			->will($this->returnValue(true));
 
+		$backend->expects($this->once())
+			->method('getBackendName')
+			->will($this->returnValue('Mock_OC_User_Dummy'));
+
 		$manager = new \OC\User\Manager();
 		$manager->registerBackend($backend);
 
@@ -393,6 +408,9 @@ class Manager extends \PHPUnit_Framework_TestCase {
 			->method('implementsActions')
 			->with(\OC_USER_BACKEND_COUNT_USERS)
 			->will($this->returnValue(true));
+		$backend1->expects($this->once())
+			->method('getBackendName')
+			->will($this->returnValue('Mock_OC_User_Dummy'));
 
 		$backend2 = $this->getMock('\OC_User_Dummy');
 		$backend2->expects($this->once())
@@ -403,6 +421,9 @@ class Manager extends \PHPUnit_Framework_TestCase {
 			->method('implementsActions')
 			->with(\OC_USER_BACKEND_COUNT_USERS)
 			->will($this->returnValue(true));
+		$backend2->expects($this->once())
+			->method('getBackendName')
+			->will($this->returnValue('Mock_OC_User_Dummy'));
 
 		$manager = new \OC\User\Manager();
 		$manager->registerBackend($backend1);
@@ -416,6 +437,17 @@ class Manager extends \PHPUnit_Framework_TestCase {
 
 		$users = array_shift($result);
 		//users from backends shall be summed up
-		$this->assertEquals(7+16, $users);
+		$this->assertEquals(7 + 16, $users);
+	}
+
+	public function testDeleteUser() {
+		$manager = new \OC\User\Manager();
+		$backend = new \OC_User_Dummy();
+
+		$backend->createUser('foo', 'bar');
+		$manager->registerBackend($backend);
+		$this->assertTrue($manager->userExists('foo'));
+		$manager->get('foo')->delete();
+		$this->assertFalse($manager->userExists('foo'));
 	}
 }

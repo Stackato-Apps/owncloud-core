@@ -8,7 +8,7 @@
 
 use \OC\Security\Crypto;
 
-class CryptoTest extends \PHPUnit_Framework_TestCase {
+class CryptoTest extends \Test\TestCase {
 
 	public function defaultEncryptionProvider()
 	{
@@ -23,7 +23,8 @@ class CryptoTest extends \PHPUnit_Framework_TestCase {
 	protected $crypto;
 
 	protected function setUp() {
-		$this->crypto = new Crypto(\OC::$server->getConfig());
+		parent::setUp();
+		$this->crypto = new Crypto(\OC::$server->getConfig(), \OC::$server->getSecureRandom());
 	}
 
 	/**

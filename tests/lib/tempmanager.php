@@ -21,22 +21,25 @@ class NullLogger extends Log {
 	}
 }
 
-class TempManager extends \PHPUnit_Framework_TestCase {
+class TempManager extends \Test\TestCase {
 	protected $baseDir;
 
-	public function setUp() {
-		$this->baseDir = get_temp_dir() . '/oc_tmp_test';
+	protected function setUp() {
+		parent::setUp();
+
+		$this->baseDir = get_temp_dir() . $this->getUniqueID('/oc_tmp_test');
 		if (!is_dir($this->baseDir)) {
 			mkdir($this->baseDir);
 		}
 	}
 
-	public function tearDown() {
+	protected function tearDown() {
 		\OC_Helper::rmdirr($this->baseDir);
+		parent::tearDown();
 	}
 
 	/**
-	 * @param \Psr\Log\LoggerInterface $logger
+	 * @param  \OCP\ILogger $logger
 	 * @return \OC\TempManager
 	 */
 	protected function getManager($logger = null) {
@@ -48,7 +51,7 @@ class TempManager extends \PHPUnit_Framework_TestCase {
 
 	public function testGetFile() {
 		$manager = $this->getManager();
-		$file = $manager->getTemporaryFile('.txt');
+		$file = $manager->getTemporaryFile('txt');
 		$this->assertStringEndsWith('.txt', $file);
 		$this->assertTrue(is_file($file));
 		$this->assertTrue(is_writable($file));
@@ -70,8 +73,8 @@ class TempManager extends \PHPUnit_Framework_TestCase {
 
 	public function testCleanFiles() {
 		$manager = $this->getManager();
-		$file1 = $manager->getTemporaryFile('.txt');
-		$file2 = $manager->getTemporaryFile('.txt');
+		$file1 = $manager->getTemporaryFile('txt');
+		$file2 = $manager->getTemporaryFile('txt');
 		$this->assertTrue(file_exists($file1));
 		$this->assertTrue(file_exists($file2));
 
@@ -102,8 +105,8 @@ class TempManager extends \PHPUnit_Framework_TestCase {
 
 	public function testCleanOld() {
 		$manager = $this->getManager();
-		$oldFile = $manager->getTemporaryFile('.txt');
-		$newFile = $manager->getTemporaryFile('.txt');
+		$oldFile = $manager->getTemporaryFile('txt');
+		$newFile = $manager->getTemporaryFile('txt');
 		$folder = $manager->getTemporaryFolder();
 		$nonOcFile = $this->baseDir . '/foo.txt';
 		file_put_contents($nonOcFile, 'bar');
@@ -122,16 +125,24 @@ class TempManager extends \PHPUnit_Framework_TestCase {
 	}
 
 	public function testLogCantCreateFile() {
+		if (\OC_Util::runningOnWindows()) {
+			$this->markTestSkipped('[Windows] chmod() does not work as intended on Windows.');
+		}
+
 		$logger = $this->getMock('\Test\NullLogger');
 		$manager = $this->getManager($logger);
 		chmod($this->baseDir, 0500);
 		$logger->expects($this->once())
 			->method('warning')
 			->with($this->stringContains('Can not create a temporary file in directory'));
-		$this->assertFalse($manager->getTemporaryFile('.txt'));
+		$this->assertFalse($manager->getTemporaryFile('txt'));
 	}
 
 	public function testLogCantCreateFolder() {
+		if (\OC_Util::runningOnWindows()) {
+			$this->markTestSkipped('[Windows] chmod() does not work as intended on Windows.');
+		}
+
 		$logger = $this->getMock('\Test\NullLogger');
 		$manager = $this->getManager($logger);
 		chmod($this->baseDir, 0500);
@@ -139,5 +150,39 @@ class TempManager extends \PHPUnit_Framework_TestCase {
 			->method('warning')
 			->with($this->stringContains('Can not create a temporary folder in directory'));
 		$this->assertFalse($manager->getTemporaryFolder());
+	}
+
+	public function testBuildFileNameWithPostfix() {
+		$logger = $this->getMock('\Test\NullLogger');
+		$tmpManager = self::invokePrivate(
+			$this->getManager($logger),
+			'buildFileNameWithSuffix',
+			['/tmp/myTemporaryFile', 'postfix']
+		);
+
+		$this->assertEquals('/tmp/myTemporaryFile-.postfix', $tmpManager);
+	}
+
+	public function testBuildFileNameWithoutPostfix() {
+		$logger = $this->getMock('\Test\NullLogger');
+		$tmpManager = self::invokePrivate(
+			$this->getManager($logger),
+					'buildFileNameWithSuffix',
+			['/tmp/myTemporaryFile', '']
+		);
+
+		$this->assertEquals('/tmp/myTemporaryFile', $tmpManager);
+	}
+
+	public function testBuildFileNameWithSuffixPathTraversal() {
+		$logger = $this->getMock('\Test\NullLogger');
+		$tmpManager = self::invokePrivate(
+			$this->getManager($logger),
+			'buildFileNameWithSuffix',
+			['foo', '../Traversal\\../FileName']
+		);
+
+		$this->assertStringEndsNotWith('./Traversal\\../FileName', $tmpManager);
+		$this->assertStringEndsWith('.Traversal..FileName', $tmpManager);
 	}
 }

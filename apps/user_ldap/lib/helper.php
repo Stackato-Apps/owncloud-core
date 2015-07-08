@@ -1,23 +1,27 @@
 <?php
-
 /**
- * ownCloud – LDAP Helper
+ * @author Arthur Schiwon <blizzz@owncloud.com>
+ * @author Brice Maron <brice@bmaron.net>
+ * @author Jörn Friedrich Dreyer <jfd@butonic.de>
+ * @author Lukas Reschke <lukas@owncloud.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
+ * @author Vincent Petry <pvince81@owncloud.com>
  *
- * @author Arthur Schiwon
- * @copyright 2013 Arthur Schiwon blizzz@owncloud.com
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE
- * License as published by the Free Software Foundation; either
- * version 3 of the License, or any later version.
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
  *
- * This library is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU AFFERO GENERAL PUBLIC LICENSE for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU Affero General Public
- * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
  *
  */
 
@@ -111,9 +115,6 @@ class Helper {
 	 * @return bool true on success, false otherwise
 	 */
 	public function deleteServerConfiguration($prefix) {
-		//just to be on the safe side
-		\OCP\User::checkAdminUser();
-
 		if(!in_array($prefix, self::getServerConfigurationPrefixes())) {
 			return false;
 		}
@@ -158,33 +159,6 @@ class Helper {
 		}
 
 		return count($all) !== count($active) || count($all) === 0;
-	}
-
-	/**
-	 * Truncate's the given mapping table
-	 *
-	 * @param string $mapping either 'user' or 'group'
-	 * @return bool true on success, false otherwise
-	 */
-	public function clearMapping($mapping) {
-		if($mapping === 'user') {
-			$table = '`*PREFIX*ldap_user_mapping`';
-		} else if ($mapping === 'group') {
-			$table = '`*PREFIX*ldap_group_mapping`';
-		} else {
-			return false;
-		}
-
-		$connection = \OC_DB::getConnection();
-		$sql = $connection->getDatabasePlatform()->getTruncateTableSQL($table);
-		$query = \OCP\DB::prepare($sql);
-		$res = $query->execute();
-
-		if(\OCP\DB::isError($res)) {
-			return false;
-		}
-
-		return true;
 	}
 
 	/**

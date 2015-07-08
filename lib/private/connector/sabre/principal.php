@@ -1,13 +1,55 @@
 <?php
 /**
- * Copyright (c) 2011 Jakob Sack mail@jakobsack.de
- * Copyright (c) 2012 Bart Visscher <bartv@thisnet.nl>
- * This file is licensed under the Affero General Public License version 3 or
- * later.
- * See the COPYING-README file.
+ * @author Bart Visscher <bartv@thisnet.nl>
+ * @author Felix Moeller <mail@felixmoeller.de>
+ * @author Jakob Sack <mail@jakobsack.de>
+ * @author Jörn Friedrich Dreyer <jfd@butonic.de>
+ * @author Lukas Reschke <lukas@owncloud.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Sebastian Döll <sebastian.doell@libasys.de>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
+ * @author Thomas Tanghus <thomas@tanghus.net>
+ * @author Vincent Petry <pvince81@owncloud.com>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
  */
 
-class OC_Connector_Sabre_Principal implements \Sabre\DAVACL\PrincipalBackend\BackendInterface {
+namespace OC\Connector\Sabre;
+
+use OCP\IUserManager;
+use OCP\IConfig;
+use \Sabre\DAV\PropPatch;
+
+class Principal implements \Sabre\DAVACL\PrincipalBackend\BackendInterface {
+	/** @var IConfig */
+	private $config;
+	/** @var IUserManager */
+	private $userManager;
+
+	/**
+	 * @param IConfig $config
+	 * @param IUserManager $userManager
+	 */
+	public function __construct(IConfig $config,
+								IUserManager $userManager) {
+		$this->config = $config;
+		$this->userManager = $userManager;
+	}
+
 	/**
 	 * Returns a list of principals based on a prefix.
 	 *
@@ -19,18 +61,25 @@ class OC_Connector_Sabre_Principal implements \Sabre\DAVACL\PrincipalBackend\Bac
 	 *   {DAV:}displayname
 	 *
 	 * @param string $prefixPath
-	 * @return array
+	 * @return string[]
 	 */
-	public function getPrincipalsByPrefix( $prefixPath ) {
-		$principals = array();
+	public function getPrincipalsByPrefix($prefixPath) {
+		$principals = [];
 
-		if ($prefixPath == 'principals') {
-			foreach(OC_User::getUsers() as $user) {
-				$user_uri = 'principals/'.$user;
-				$principals[] = array(
-					'uri' => $user_uri,
-					'{DAV:}displayname' => $user,
-				);
+		if ($prefixPath === 'principals') {
+			foreach($this->userManager->search('') as $user) {
+
+				$principal = [
+					'uri' => 'principals/' . $user->getUID(),
+					'{DAV:}displayname' => $user->getUID(),
+				];
+
+				$email = $this->config->getUserValue($user->getUID(), 'settings', 'email');
+				if(!empty($email)) {
+					$principal['{http://sabredav.org/ns}email-address'] = $email;
+				}
+
+				$principals[] = $principal;
 			}
 		}
 
@@ -47,12 +96,20 @@ class OC_Connector_Sabre_Principal implements \Sabre\DAVACL\PrincipalBackend\Bac
 	 */
 	public function getPrincipalByPath($path) {
 		list($prefix, $name) = explode('/', $path);
+		$user = $this->userManager->get($name);
 
-		if ($prefix == 'principals' && OC_User::userExists($name)) {
-			return array(
-				'uri' => 'principals/'.$name,
-				'{DAV:}displayname' => $name,
-			);
+		if ($prefix === 'principals' && !is_null($user)) {
+			$principal = [
+				'uri' => 'principals/' . $user->getUID(),
+				'{DAV:}displayname' => $user->getUID(),
+			];
+
+			$email = $this->config->getUserValue($user->getUID(), 'settings', 'email');
+			if($email) {
+				$principal['{http://sabredav.org/ns}email-address'] = $email;
+			}
+
+			return $principal;
 		}
 
 		return null;
@@ -63,6 +120,7 @@ class OC_Connector_Sabre_Principal implements \Sabre\DAVACL\PrincipalBackend\Bac
 	 *
 	 * @param string $principal
 	 * @return string[]
+	 * @throws \Sabre\DAV\Exception
 	 */
 	public function getGroupMemberSet($principal) {
 		// TODO: for now the group principal has only one member, the user itself
@@ -71,9 +129,7 @@ class OC_Connector_Sabre_Principal implements \Sabre\DAVACL\PrincipalBackend\Bac
 			throw new \Sabre\DAV\Exception('Principal not found');
 		}
 
-		return array(
-			$principal['uri']
-		);
+		return [$principal['uri']];
 	}
 
 	/**
@@ -81,12 +137,13 @@ class OC_Connector_Sabre_Principal implements \Sabre\DAVACL\PrincipalBackend\Bac
 	 *
 	 * @param string $principal
 	 * @return array
+	 * @throws \Sabre\DAV\Exception
 	 */
 	public function getGroupMembership($principal) {
-		list($prefix, $name) = \Sabre\DAV\URLUtil::splitPath($principal);
+		list($prefix, $name) = \Sabre\HTTP\URLUtil::splitPath($principal);
 
 		$group_membership = array();
-		if ($prefix == 'principals') {
+		if ($prefix === 'principals') {
 			$principal = $this->getPrincipalByPath($principal);
 			if (!$principal) {
 				throw new \Sabre\DAV\Exception('Principal not found');
@@ -112,17 +169,37 @@ class OC_Connector_Sabre_Principal implements \Sabre\DAVACL\PrincipalBackend\Bac
 	 *
 	 * @param string $principal
 	 * @param array $members
-	 * @return void
+	 * @throws \Sabre\DAV\Exception
 	 */
 	public function setGroupMemberSet($principal, array $members) {
 		throw new \Sabre\DAV\Exception('Setting members of the group is not supported yet');
 	}
 
-	function updatePrincipal($path, $mutations) {
+	/**
+	 * @param string $path
+	 * @param PropPatch $propPatch
+	 * @return int
+	 */
+	function updatePrincipal($path, PropPatch $propPatch) {
 		return 0;
 	}
 
-	function searchPrincipals($prefixPath, array $searchProperties) {
-		return array();
+	/**
+	 * @param string $prefixPath
+	 * @param array $searchProperties
+	 * @param string $test
+	 * @return array
+	 */
+	function searchPrincipals($prefixPath, array $searchProperties, $test = 'allof') {
+		return [];
+	}
+
+	/**
+	 * @param string $uri
+	 * @param string $principalPrefix
+	 * @return string
+	 */
+	function findByUri($uri, $principalPrefix) {
+		return '';
 	}
 }

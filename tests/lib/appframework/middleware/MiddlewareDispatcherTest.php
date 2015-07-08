@@ -100,7 +100,7 @@ class TestMiddleware extends Middleware {
 }
 
 
-class MiddlewareDispatcherTest extends \PHPUnit_Framework_TestCase {
+class MiddlewareDispatcherTest extends \Test\TestCase {
 
 	public $exception;
 	public $response;
@@ -113,8 +113,9 @@ class MiddlewareDispatcherTest extends \PHPUnit_Framework_TestCase {
 	 */
 	private $dispatcher;
 
+	protected function setUp() {
+		parent::setUp();
 
-	public function setUp() {
 		$this->dispatcher = new MiddlewareDispatcher();
 		$this->controller = $this->getControllerMock();
 		$this->method = 'method';
@@ -125,8 +126,17 @@ class MiddlewareDispatcherTest extends \PHPUnit_Framework_TestCase {
 
 
 	private function getControllerMock(){
-		return $this->getMock('OCP\AppFramework\Controller', array('method'),
-			array('app', new Request(array('method' => 'GET'))));
+		return $this->getMock(
+			'OCP\AppFramework\Controller',
+			['method'],
+			['app',
+				new Request(
+					['method' => 'GET'],
+					$this->getMock('\OCP\Security\ISecureRandom'),
+					$this->getMock('\OCP\IConfig')
+				)
+			]
+		);
 	}
 
 

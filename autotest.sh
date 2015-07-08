@@ -2,17 +2,34 @@
 #
 # ownCloud
 #
+# @author Vincent Petry
+# @author Morris Jobke
+# @author Robin McCorkell
 # @author Thomas Müller
-# @copyright 2012, 2013 Thomas Müller thomas.mueller@tmit.eu
+# @author Andreas Fischer
+# @author Joas Schilling
+# @author Lukas Reschke
+# @copyright 2012-2015 Thomas Müller thomas.mueller@tmit.eu
 #
+
+set -e
 
 #$EXECUTOR_NUMBER is set by Jenkins and allows us to run autotest in parallel
 DATABASENAME=oc_autotest$EXECUTOR_NUMBER
 DATABASEUSER=oc_autotest$EXECUTOR_NUMBER
+DATABASEHOST=localhost
 ADMINLOGIN=admin$EXECUTOR_NUMBER
 BASEDIR=$PWD
 
 DBCONFIGS="sqlite mysql pgsql oci"
+
+# $PHP_EXE is run through 'which' and as such e.g. 'php' or 'hhvm' is usually
+# sufficient. Due to the behaviour of 'which', $PHP_EXE may also be a path
+# (absolute or not) to an executable, e.g. ./code/projects/php-src/sapi/cli/php.
+if [ -z "$PHP_EXE" ]; then
+	PHP_EXE=php
+fi
+PHP=$(which "$PHP_EXE")
 PHPUNIT=$(which phpunit)
 
 function print_syntax {
@@ -24,29 +41,43 @@ function print_syntax {
 	echo -e "\nIf no arguments are specified, all tests will be run with all database configs" >&2
 }
 
-if ! [ -x $PHPUNIT ]; then
+if [ -x "$PHP" ]; then
+	echo "Using PHP executable $PHP"
+else
+	echo "Could not find PHP executable $PHP_EXE" >&2
+	exit 3
+fi
+
+if ! [ -x "$PHPUNIT" ]; then
 	echo "phpunit executable not found, please install phpunit version >= 3.7" >&2
 	exit 3
 fi
 
-PHPUNIT_VERSION=$($PHPUNIT --version | cut -d" " -f2)
-PHPUNIT_MAJOR_VERSION=$(echo $PHPUNIT_VERSION | cut -d"." -f1)
-PHPUNIT_MINOR_VERSION=$(echo $PHPUNIT_VERSION | cut -d"." -f2)
+# PHPUnit might also be installed via a facade binary script
+if [[ "$PHPUNIT" =~ \.phar$ ]]; then
+  PHPUNIT=( "$PHP" "$PHPUNIT" )
+else
+  PHPUNIT=( "$PHPUNIT" )
+fi
 
-if ! [ $PHPUNIT_MAJOR_VERSION -gt 3 -o \( $PHPUNIT_MAJOR_VERSION -eq 3 -a $PHPUNIT_MINOR_VERSION -ge 7 \) ]; then
+PHPUNIT_VERSION=$($PHPUNIT --version | cut -d" " -f2)
+PHPUNIT_MAJOR_VERSION=$(echo "$PHPUNIT_VERSION" | cut -d"." -f1)
+PHPUNIT_MINOR_VERSION=$(echo "$PHPUNIT_VERSION" | cut -d"." -f2)
+
+if ! [ "$PHPUNIT_MAJOR_VERSION" -gt 3 -o \( "$PHPUNIT_MAJOR_VERSION" -eq 3 -a "$PHPUNIT_MINOR_VERSION" -ge 7 \) ]; then
 	echo "phpunit version >= 3.7 required. Version found: $PHPUNIT_VERSION" >&2
 	exit 4
 fi
 
-if ! [ -w config -a -w config/config.php ]; then
+if ! [ \( -w config -a ! -f config/config.php \) -o \( -f config/config.php -a -w config/config.php \) ]; then
 	echo "Please enable write permissions on config and config/config.php" >&2
 	exit 1
 fi
 
-if [ $1 ]; then
+if [ "$1" ]; then
 	FOUND=0
 	for DBCONFIG in $DBCONFIGS; do
-		if [ $1 = $DBCONFIG ]; then
+		if [ "$1" = "$DBCONFIG" ]; then
 			FOUND=1
 			break
 		fi
@@ -58,10 +89,33 @@ if [ $1 ]; then
 	fi
 fi
 
-# Back up existing (dev) config if one exists
-if [ -f config/config.php ]; then
+# check for the presence of @since in all OCP methods
+$PHP build/OCPSinceChecker.php
+
+# Back up existing (dev) config if one exists and backup not already there
+if [ -f config/config.php ] && [ ! -f config/config-autotest-backup.php ]; then
 	mv config/config.php config/config-autotest-backup.php
 fi
+
+function cleanup_config {
+	if [ ! -z "$DOCKER_CONTAINER_ID" ]; then
+		echo "Kill the docker $DOCKER_CONTAINER_ID"
+		docker rm -f "$DOCKER_CONTAINER_ID"
+	fi
+
+	cd "$BASEDIR"
+	# Restore existing config
+	if [ -f config/config-autotest-backup.php ]; then
+		mv config/config-autotest-backup.php config/config.php
+	fi
+	# Remove autotest config
+	if [ -f config/autoconfig.php ]; then
+		rm config/autoconfig.php
+	fi
+}
+
+# restore config on exit
+trap cleanup_config EXIT
 
 # use tmpfs for datadir - should speedup unit test execution
 if [ -d /dev/shm ]; then
@@ -72,135 +126,55 @@ fi
 
 echo "Using database $DATABASENAME"
 
-# create autoconfig for sqlite, mysql and postgresql
-cat > ./tests/autoconfig-sqlite.php <<DELIM
-<?php
-\$AUTOCONFIG = array (
-  'installed' => false,
-  'dbtype' => 'sqlite',
-  'dbtableprefix' => 'oc_',
-  'adminlogin' => '$ADMINLOGIN',
-  'adminpass' => 'admin',
-  'directory' => '$DATADIR',
-);
-DELIM
-
-cat > ./tests/autoconfig-mysql.php <<DELIM
-<?php
-\$AUTOCONFIG = array (
-  'installed' => false,
-  'dbtype' => 'mysql',
-  'dbtableprefix' => 'oc_',
-  'adminlogin' => '$ADMINLOGIN',
-  'adminpass' => 'admin',
-  'directory' => '$DATADIR',
-  'dbuser' => '$DATABASEUSER',
-  'dbname' => '$DATABASENAME',
-  'dbhost' => 'localhost',
-  'dbpass' => 'owncloud',
-);
-DELIM
-
-cat > ./tests/autoconfig-pgsql.php <<DELIM
-<?php
-\$AUTOCONFIG = array (
-  'installed' => false,
-  'dbtype' => 'pgsql',
-  'dbtableprefix' => 'oc_',
-  'adminlogin' => '$ADMINLOGIN',
-  'adminpass' => 'admin',
-  'directory' => '$DATADIR',
-  'dbuser' => '$DATABASEUSER',
-  'dbname' => '$DATABASENAME',
-  'dbhost' => 'localhost',
-  'dbpass' => 'owncloud',
-);
-DELIM
-
-cat > ./tests/autoconfig-oci.php <<DELIM
-<?php
-\$AUTOCONFIG = array (
-  'installed' => false,
-  'dbtype' => 'oci',
-  'dbtableprefix' => 'oc_',
-  'adminlogin' => '$ADMINLOGIN',
-  'adminpass' => 'admin',
-  'directory' => '$DATADIR',
-  'dbuser' => '$DATABASENAME',
-  'dbname' => 'XE',
-  'dbhost' => 'localhost',
-  'dbpass' => 'owncloud',
-);
-DELIM
-
 function execute_tests {
 	echo "Setup environment for $1 testing ..."
 	# back to root folder
-	cd $BASEDIR
+	cd "$BASEDIR"
 
 	# revert changes to tests/data
 	git checkout tests/data
 
 	# reset data directory
-	rm -rf $DATADIR
-	mkdir $DATADIR
+	rm -rf "$DATADIR"
+	mkdir "$DATADIR"
 
-	# remove the old config file
-	#rm -rf config/config.php
 	cp tests/preseed-config.php config/config.php
 
 	# drop database
 	if [ "$1" == "mysql" ] ; then
-		mysql -u $DATABASEUSER -powncloud -e "DROP DATABASE $DATABASENAME"
+		mysql -u "$DATABASEUSER" -powncloud -e "DROP DATABASE IF EXISTS $DATABASENAME" -h $DATABASEHOST || true
 	fi
 	if [ "$1" == "pgsql" ] ; then
-		dropdb -U $DATABASEUSER $DATABASENAME
+		dropdb -U "$DATABASEUSER" "$DATABASENAME" || true
 	fi
 	if [ "$1" == "oci" ] ; then
-		echo "drop the database"
-		sqlplus -s -l / as sysdba <<EOF
-			drop user $DATABASENAME cascade;
-EOF
+		echo "Fire up the oracle docker"
+		DOCKER_CONTAINER_ID=$(docker run -d deepdiver/docker-oracle-xe-11g)
+		DATABASEHOST=$(docker inspect "$DOCKER_CONTAINER_ID" | grep IPAddress | cut -d '"' -f 4)
 
-		echo "create the database"
-		sqlplus -s -l / as sysdba <<EOF
-			create user $DATABASENAME identified by owncloud;
-			alter user $DATABASENAME default tablespace users
-			temporary tablespace temp
-			quota unlimited on users;
-			grant create session
-			, create table
-			, create procedure
-			, create sequence
-			, create trigger
-			, create view
-			, create synonym
-			, alter session
-			to $DATABASENAME;
-			exit;
-EOF
+		echo "Waiting 120 seconds for Oracle initialization ... "
+		sleep 120
+
+		DATABASEUSER=autotest
+		DATABASENAME='XE'
 	fi
 
-	# copy autoconfig
-	cp $BASEDIR/tests/autoconfig-$1.php $BASEDIR/config/autoconfig.php
-
 	# trigger installation
-	echo "INDEX"
-	php -f index.php | grep -i -C9999 error && echo "Error during setup" && exit 101
-	echo "END INDEX"
+	echo "Installing ...."
+	"$PHP" ./occ maintenance:install --database="$1" --database-name="$DATABASENAME" --database-host="$DATABASEHOST" --database-user="$DATABASEUSER" --database-pass=owncloud --database-table-prefix=oc_ --admin-user="$ADMINLOGIN" --admin-pass=admin --data-dir="$DATADIR"
 
 	#test execution
 	echo "Testing with $1 ..."
 	cd tests
-	rm -rf coverage-html-$1
-	mkdir coverage-html-$1
-	php -f enable_all.php | grep -i -C9999 error && echo "Error during setup" && exit 101
+	rm -rf "coverage-html-$1"
+	mkdir "coverage-html-$1"
+	"$PHP" -f enable_all.php | grep -i -C9999 error && echo "Error during setup" && exit 101
 	if [ -z "$NOCOVERAGE" ]; then
-		$PHPUNIT --configuration phpunit-autotest.xml --log-junit autotest-results-$1.xml --coverage-clover autotest-clover-$1.xml --coverage-html coverage-html-$1 $2 $3
+		"${PHPUNIT[@]}" --configuration phpunit-autotest.xml --log-junit "autotest-results-$1.xml" --coverage-clover "autotest-clover-$1.xml" --coverage-html "coverage-html-$1" "$2" "$3"
 		RESULT=$?
 	else
 		echo "No coverage"
-		$PHPUNIT --configuration phpunit-autotest.xml --log-junit autotest-results-$1.xml $2 $3
+		"${PHPUNIT[@]}" --configuration phpunit-autotest.xml --log-junit "autotest-results-$1.xml" "$2" "$3"
 		RESULT=$?
 	fi
 }
@@ -212,17 +186,14 @@ if [ -z "$1" ]
   then
 	# run all known database configs
 	for DBCONFIG in $DBCONFIGS; do
-		execute_tests $DBCONFIG
+		execute_tests "$DBCONFIG"
 	done
 else
-	execute_tests $1 $2 $3
-fi
-
-cd $BASEDIR
-
-# Restore existing config
-if [ -f config/config-autotest-backup.php ]; then
-	mv config/config-autotest-backup.php config/config.php
+	FILENAME="$2"
+	if [ ! -z "$2" ] && [ ! -f "tests/$FILENAME" ]; then
+		FILENAME="../$FILENAME"
+	fi
+	execute_tests "$1" "$FILENAME" "$3"
 fi
 
 #

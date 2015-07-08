@@ -61,8 +61,8 @@ describe('OCA.Files.FileList tests', function() {
 		$('#testArea').append(
 			'<div id="app-content-files">' +
 			// init horrible parameters
-			'<input type="hidden" id="dir" value="/subdir"></input>' +
-			'<input type="hidden" id="permissions" value="31"></input>' +
+			'<input type="hidden" id="dir" value="/subdir"/>' +
+			'<input type="hidden" id="permissions" value="31"/>' +
 			// dummy controls
 			'<div id="controls">' +
 			'   <div class="actions creatable"></div>' +
@@ -87,7 +87,9 @@ describe('OCA.Files.FileList tests', function() {
 			'<tbody id="fileList"></tbody>' +
 			'<tfoot></tfoot>' +
 			'</table>' +
-			'<div id="emptycontent">Empty content message</div>' +
+			// TODO: move to handlebars template
+			'<div id="emptycontent"><h2>Empty content message</h2><p class="uploadmessage">Upload message</p></div>' +
+			'<div class="nofilterresults hidden"></div>' +
 			'</div>'
 		);
 
@@ -183,6 +185,7 @@ describe('OCA.Files.FileList tests', function() {
 			expect($tr.find('.nametext').text().trim()).toEqual('testName.txt');
 
 			expect($tr.find('.filesize').text()).toEqual('1 kB');
+			expect($tr.find('.date').text()).not.toEqual('?');
 			expect(fileList.findFileEl('testName.txt')[0]).toEqual($tr[0]);
 		});
 		it('generates dir element with correct attributes when calling add() with dir data', function() {
@@ -209,6 +212,7 @@ describe('OCA.Files.FileList tests', function() {
 			expect($tr.attr('data-mtime')).toEqual('123456');
 
 			expect($tr.find('.filesize').text()).toEqual('1 kB');
+			expect($tr.find('.date').text()).not.toEqual('?');
 
 			expect(fileList.findFileEl('testFolder')[0]).toEqual($tr[0]);
 		});
@@ -233,6 +237,7 @@ describe('OCA.Files.FileList tests', function() {
 			expect($tr.attr('data-mtime')).toEqual('123456');
 
 			expect($tr.find('.filesize').text()).toEqual('Pending');
+			expect($tr.find('.date').text()).not.toEqual('?');
 		});
 		it('generates dir element with default attributes when calling add() with minimal data', function() {
 			var fileData = {
@@ -254,6 +259,7 @@ describe('OCA.Files.FileList tests', function() {
 			expect($tr.attr('data-mtime')).toEqual('123456');
 
 			expect($tr.find('.filesize').text()).toEqual('Pending');
+			expect($tr.find('.date').text()).not.toEqual('?');
 		});
 		it('generates file element with zero size when size is explicitly zero', function() {
 			var fileData = {
@@ -263,6 +269,15 @@ describe('OCA.Files.FileList tests', function() {
 			};
 			var $tr = fileList.add(fileData);
 			expect($tr.find('.filesize').text()).toEqual('0 kB');
+		});
+		it('generates file element with unknown date when mtime invalid', function() {
+			var fileData = {
+				type: 'dir',
+				name: 'testFolder',
+				mtime: -1
+			};
+			var $tr = fileList.add(fileData);
+			expect($tr.find('.date .modified').text()).toEqual('?');
 		});
 		it('adds new file to the end of the list', function() {
 			var $tr;
@@ -345,6 +360,25 @@ describe('OCA.Files.FileList tests', function() {
 			expect($('#emptycontent').hasClass('hidden')).toEqual(true);
 			expect(fileList.isEmpty).toEqual(false);
 		});
+		it('correctly adds the extension markup and show hidden files completely in gray', function() {
+			var $tr;
+			var testDataAndExpectedResult = [
+				{file: {type: 'file', name: 'ZZZ.txt'}, extension: '.txt'},
+				{file: {type: 'file', name: 'ZZZ.tar.gz'}, extension: '.gz'},
+				{file: {type: 'file', name: 'test.with.some.dots.in.it.txt'}, extension: '.txt'},
+				// we render hidden files completely in gray
+				{file: {type: 'file', name: '.test.with.some.dots.in.it.txt'}, extension: '.test.with.some.dots.in.it.txt'},
+				{file: {type: 'file', name: '.hidden'}, extension: '.hidden'},
+			];
+			fileList.setFiles(testFiles);
+
+			for(var i = 0; i < testDataAndExpectedResult.length; i++) {
+				var testSet = testDataAndExpectedResult[i];
+				var fileData = testSet['file'];
+				$tr = fileList.add(fileData);
+				expect($tr.find('.nametext .extension').text()).toEqual(testSet['extension']);
+			}
+		});
 	});
 	describe('Removing files from the list', function() {
 		it('Removes file from list when calling remove() and updates summary', function() {
@@ -426,15 +460,15 @@ describe('OCA.Files.FileList tests', function() {
 			fileList.setFiles(testFiles);
 			doDelete();
 
-			expect(fileList.findFileEl('One.txt').find('.progress-icon:not(.delete-icon)').length).toEqual(1);
-			expect(fileList.findFileEl('Three.pdf').find('.delete-icon:not(.progress-icon)').length).toEqual(1);
+			expect(fileList.findFileEl('One.txt').find('.icon-loading-small:not(.icon-delete)').length).toEqual(1);
+			expect(fileList.findFileEl('Three.pdf').find('.icon-delete:not(.icon-loading-small)').length).toEqual(1);
 		});
 		it('shows spinner on all files when deleting all', function() {
 			fileList.setFiles(testFiles);
 
 			fileList.do_delete();
 
-			expect(fileList.$fileList.find('tr .progress-icon:not(.delete-icon)').length).toEqual(4);
+			expect(fileList.$fileList.find('tr .icon-loading-small:not(.icon-delete)').length).toEqual(4);
 		});
 		it('updates summary when deleting last file', function() {
 			var $summary;
@@ -648,6 +682,23 @@ describe('OCA.Files.FileList tests', function() {
 			expect(fileList.$fileList.find('input.filename').length).toEqual(0);
 			expect(fileList.$fileList.find('form').length).toEqual(0);
 		});
+		it('Restores thumbnail when rename was cancelled', function() {
+			doRename();
+
+			expect(OC.TestUtil.getImageUrl(fileList.findFileEl('Tu_after_three.txt').find('.thumbnail')))
+				.toEqual(OC.imagePath('core', 'loading.gif'));
+
+			fakeServer.requests[0].respond(200, {'Content-Type': 'application/json'}, JSON.stringify({
+				status: 'error',
+				data: {
+					message: 'Something went wrong'
+				}
+			}));
+
+			expect(fileList.findFileEl('One.txt').length).toEqual(1);
+			expect(OC.TestUtil.getImageUrl(fileList.findFileEl('One.txt').find('.thumbnail')))
+				.toEqual(OC.imagePath('core', 'filetypes/file.svg'));
+		});
 	});
 	describe('Moving files', function() {
 		beforeEach(function() {
@@ -733,7 +784,7 @@ describe('OCA.Files.FileList tests', function() {
 			fakeServer.requests[0].respond(200, {'Content-Type': 'application/json'}, JSON.stringify({
 				status: 'error',
 				data: {
-					message: 'Error while moving file',
+					message: 'Error while moving file'
 				}
 			}));
 
@@ -741,6 +792,31 @@ describe('OCA.Files.FileList tests', function() {
 
 			expect(notificationStub.calledOnce).toEqual(true);
 			expect(notificationStub.getCall(0).args[0]).toEqual('Error while moving file');
+		});
+		it('Restores thumbnail if a file could not be moved', function() {
+			var request;
+			fileList.move('One.txt', '/somedir');
+
+			expect(OC.TestUtil.getImageUrl(fileList.findFileEl('One.txt').find('.thumbnail')))
+				.toEqual(OC.imagePath('core', 'loading.gif'));
+
+			expect(fakeServer.requests.length).toEqual(1);
+			request = fakeServer.requests[0];
+
+			fakeServer.requests[0].respond(200, {'Content-Type': 'application/json'}, JSON.stringify({
+				status: 'error',
+				data: {
+					message: 'Error while moving file'
+				}
+			}));
+
+			expect(fileList.findFileEl('One.txt').length).toEqual(1);
+
+			expect(notificationStub.calledOnce).toEqual(true);
+			expect(notificationStub.getCall(0).args[0]).toEqual('Error while moving file');
+
+			expect(OC.TestUtil.getImageUrl(fileList.findFileEl('One.txt').find('.thumbnail')))
+				.toEqual(OC.imagePath('core', 'filetypes/file.svg'));
 		});
 	});
 	describe('List rendering', function() {
@@ -770,13 +846,15 @@ describe('OCA.Files.FileList tests', function() {
 			fileList.setFiles([]);
 			expect($('#filestable thead th').hasClass('hidden')).toEqual(true);
 			expect($('#emptycontent').hasClass('hidden')).toEqual(false);
+			expect($('#emptycontent .uploadmessage').hasClass('hidden')).toEqual(false);
 			expect(fileList.$el.find('.summary').hasClass('hidden')).toEqual(true);
 		});
-		it('hides headers, empty content message, and summary when list is empty and user has no creation permission', function(){
+		it('hides headers, upload message, and summary when list is empty and user has no creation permission', function(){
 			$('#permissions').val(0);
 			fileList.setFiles([]);
 			expect($('#filestable thead th').hasClass('hidden')).toEqual(true);
-			expect($('#emptycontent').hasClass('hidden')).toEqual(true);
+			expect($('#emptycontent').hasClass('hidden')).toEqual(false);
+			expect($('#emptycontent .uploadmessage').hasClass('hidden')).toEqual(true);
 			expect(fileList.$el.find('.summary').hasClass('hidden')).toEqual(true);
 		});
 		it('calling findFileEl() can find existing file element', function() {
@@ -844,6 +922,116 @@ describe('OCA.Files.FileList tests', function() {
 			fileList.remove('unexist.txt');
 			expect($summary.hasClass('hidden')).toEqual(false);
 			expect($summary.find('.info').text()).toEqual('0 folders and 1 file');
+		});
+	});
+	describe('Filtered list rendering', function() {
+		it('filters the list of files using filter()', function() {
+			expect(fileList.files.length).toEqual(0);
+			expect(fileList.files).toEqual([]);
+			fileList.setFiles(testFiles);
+			var $summary = $('#filestable .summary');
+			var $nofilterresults = fileList.$el.find(".nofilterresults");
+			expect($nofilterresults.length).toEqual(1);
+			expect($summary.hasClass('hidden')).toEqual(false);
+
+			expect($('#fileList tr:not(.hidden)').length).toEqual(4);
+			expect(fileList.files.length).toEqual(4);
+			expect($summary.hasClass('hidden')).toEqual(false);
+			expect($nofilterresults.hasClass('hidden')).toEqual(true);
+
+			fileList.setFilter('e');
+			expect($('#fileList tr:not(.hidden)').length).toEqual(3);
+			expect(fileList.files.length).toEqual(4);
+			expect($summary.hasClass('hidden')).toEqual(false);
+			expect($summary.find('.info').text()).toEqual("1 folder and 2 files match 'e'");
+			expect($nofilterresults.hasClass('hidden')).toEqual(true);
+
+			fileList.setFilter('ee');
+			expect($('#fileList tr:not(.hidden)').length).toEqual(1);
+			expect(fileList.files.length).toEqual(4);
+			expect($summary.hasClass('hidden')).toEqual(false);
+			expect($summary.find('.info').text()).toEqual("0 folders and 1 file matches 'ee'");
+			expect($nofilterresults.hasClass('hidden')).toEqual(true);
+
+			fileList.setFilter('eee');
+			expect($('#fileList tr:not(.hidden)').length).toEqual(0);
+			expect(fileList.files.length).toEqual(4);
+			expect($summary.hasClass('hidden')).toEqual(true);
+			expect($nofilterresults.hasClass('hidden')).toEqual(false);
+
+			fileList.setFilter('ee');
+			expect($('#fileList tr:not(.hidden)').length).toEqual(1);
+			expect(fileList.files.length).toEqual(4);
+			expect($summary.hasClass('hidden')).toEqual(false);
+			expect($summary.find('.info').text()).toEqual("0 folders and 1 file matches 'ee'");
+			expect($nofilterresults.hasClass('hidden')).toEqual(true);
+
+			fileList.setFilter('e');
+			expect($('#fileList tr:not(.hidden)').length).toEqual(3);
+			expect(fileList.files.length).toEqual(4);
+			expect($summary.hasClass('hidden')).toEqual(false);
+			expect($summary.find('.info').text()).toEqual("1 folder and 2 files match 'e'");
+			expect($nofilterresults.hasClass('hidden')).toEqual(true);
+
+			fileList.setFilter('');
+			expect($('#fileList tr:not(.hidden)').length).toEqual(4);
+			expect(fileList.files.length).toEqual(4);
+			expect($summary.hasClass('hidden')).toEqual(false);
+			expect($summary.find('.info').text()).toEqual("1 folder and 3 files");
+			expect($nofilterresults.hasClass('hidden')).toEqual(true);
+		});
+		it('hides the emptyfiles notice when using filter()', function() {
+			expect(fileList.files.length).toEqual(0);
+			expect(fileList.files).toEqual([]);
+			fileList.setFiles([]);
+			var $summary = $('#filestable .summary');
+			var $emptycontent = fileList.$el.find("#emptycontent");
+			var $nofilterresults = fileList.$el.find(".nofilterresults");
+			expect($emptycontent.length).toEqual(1);
+			expect($nofilterresults.length).toEqual(1);
+
+			expect($('#fileList tr:not(.hidden)').length).toEqual(0);
+			expect(fileList.files.length).toEqual(0);
+			expect($summary.hasClass('hidden')).toEqual(true);
+			expect($emptycontent.hasClass('hidden')).toEqual(false);
+			expect($nofilterresults.hasClass('hidden')).toEqual(true);
+
+			fileList.setFilter('e');
+			expect($('#fileList tr:not(.hidden)').length).toEqual(0);
+			expect(fileList.files.length).toEqual(0);
+			expect($summary.hasClass('hidden')).toEqual(true);
+			expect($emptycontent.hasClass('hidden')).toEqual(true);
+			expect($nofilterresults.hasClass('hidden')).toEqual(false);
+
+			fileList.setFilter('');
+			expect($('#fileList tr:not(.hidden)').length).toEqual(0);
+			expect(fileList.files.length).toEqual(0);
+			expect($summary.hasClass('hidden')).toEqual(true);
+			expect($emptycontent.hasClass('hidden')).toEqual(false);
+			expect($nofilterresults.hasClass('hidden')).toEqual(true);
+		});
+		it('does not show the emptyfiles or nofilterresults notice when the mask is active', function() {
+			expect(fileList.files.length).toEqual(0);
+			expect(fileList.files).toEqual([]);
+			fileList.showMask();
+			fileList.setFiles(testFiles);
+			var $emptycontent = fileList.$el.find("#emptycontent");
+			var $nofilterresults = fileList.$el.find(".nofilterresults");
+			expect($emptycontent.length).toEqual(1);
+			expect($nofilterresults.length).toEqual(1);
+
+			expect($emptycontent.hasClass('hidden')).toEqual(true);
+			expect($nofilterresults.hasClass('hidden')).toEqual(true);
+
+			/*
+			fileList.setFilter('e');
+			expect($emptycontent.hasClass('hidden')).toEqual(true);
+			expect($nofilterresults.hasClass('hidden')).toEqual(false);
+			*/
+
+			fileList.setFilter('');
+			expect($emptycontent.hasClass('hidden')).toEqual(true);
+			expect($nofilterresults.hasClass('hidden')).toEqual(true);
 		});
 	});
 	describe('Rendering next page on scroll', function() {
@@ -955,8 +1143,8 @@ describe('OCA.Files.FileList tests', function() {
 				name: 'testFile.txt'
 			};
 			var $tr = fileList.add(fileData);
-			var $td = $tr.find('td.filename');
-			expect(OC.TestUtil.getImageUrl($td)).toEqual(OC.webroot + '/core/img/filetypes/file.svg');
+			var $imgDiv = $tr.find('td.filename .thumbnail');
+			expect(OC.TestUtil.getImageUrl($imgDiv)).toEqual(OC.webroot + '/core/img/filetypes/file.svg');
 			expect(previewLoadStub.notCalled).toEqual(true);
 		});
 		it('renders default icon for dir when none provided and no preview is available', function() {
@@ -965,8 +1153,8 @@ describe('OCA.Files.FileList tests', function() {
 				name: 'test dir'
 			};
 			var $tr = fileList.add(fileData);
-			var $td = $tr.find('td.filename');
-			expect(OC.TestUtil.getImageUrl($td)).toEqual(OC.webroot + '/core/img/filetypes/folder.svg');
+			var $imgDiv = $tr.find('td.filename .thumbnail');
+			expect(OC.TestUtil.getImageUrl($imgDiv)).toEqual(OC.webroot + '/core/img/filetypes/folder.svg');
 			expect(previewLoadStub.notCalled).toEqual(true);
 		});
 		it('renders provided icon for file when provided', function() {
@@ -976,8 +1164,8 @@ describe('OCA.Files.FileList tests', function() {
 				icon: OC.webroot + '/core/img/filetypes/application-pdf.svg'
 			};
 			var $tr = fileList.add(fileData);
-			var $td = $tr.find('td.filename');
-			expect(OC.TestUtil.getImageUrl($td)).toEqual(OC.webroot + '/core/img/filetypes/application-pdf.svg');
+			var $imgDiv = $tr.find('td.filename .thumbnail');
+			expect(OC.TestUtil.getImageUrl($imgDiv)).toEqual(OC.webroot + '/core/img/filetypes/application-pdf.svg');
 			expect(previewLoadStub.notCalled).toEqual(true);
 		});
 		it('renders preview when no icon was provided and preview is available', function() {
@@ -988,11 +1176,11 @@ describe('OCA.Files.FileList tests', function() {
 			};
 			var $tr = fileList.add(fileData);
 			var $td = $tr.find('td.filename');
-			expect(OC.TestUtil.getImageUrl($td)).toEqual(OC.webroot + '/core/img/filetypes/file.svg');
+			expect(OC.TestUtil.getImageUrl($td.find('.thumbnail'))).toEqual(OC.webroot + '/core/img/filetypes/file.svg');
 			expect(previewLoadStub.calledOnce).toEqual(true);
 			// third argument is callback
 			previewLoadStub.getCall(0).args[0].callback(OC.webroot + '/somepath.png');
-			expect(OC.TestUtil.getImageUrl($td)).toEqual(OC.webroot + '/somepath.png');
+			expect(OC.TestUtil.getImageUrl($td.find('.thumbnail'))).toEqual(OC.webroot + '/somepath.png');
 		});
 		it('renders default file type icon when no icon was provided and no preview is available', function() {
 			var fileData = {
@@ -1001,8 +1189,8 @@ describe('OCA.Files.FileList tests', function() {
 				isPreviewAvailable: false
 			};
 			var $tr = fileList.add(fileData);
-			var $td = $tr.find('td.filename');
-			expect(OC.TestUtil.getImageUrl($td)).toEqual(OC.webroot + '/core/img/filetypes/file.svg');
+			var $imgDiv = $tr.find('td.filename .thumbnail');
+			expect(OC.TestUtil.getImageUrl($imgDiv)).toEqual(OC.webroot + '/core/img/filetypes/file.svg');
 			expect(previewLoadStub.notCalled).toEqual(true);
 		});
 	});
@@ -1055,7 +1243,7 @@ describe('OCA.Files.FileList tests', function() {
 						"Content-Type": "application/json"
 					},
 					JSON.stringify(data)
-			]);
+				]);
 		});
 		it('fetches file list from server and renders it when reload() is called', function() {
 			fileList.reload();
@@ -1076,12 +1264,38 @@ describe('OCA.Files.FileList tests', function() {
 			expect(OC.parseQueryString(query)).toEqual({'dir': '/anothersubdir', sort: 'name', sortdirection: 'asc'});
 			fakeServer.respond();
 		});
+		it('converts backslashes to slashes when calling changeDirectory()', function() {
+			fileList.changeDirectory('/another\\subdir');
+			expect(fileList.getCurrentDirectory()).toEqual('/another/subdir');
+		});
 		it('switches to root dir when current directory does not exist', function() {
 			fakeServer.respondWith(/\/index\.php\/apps\/files\/ajax\/list.php\?dir=%2funexist/, [
 					404, {
 						"Content-Type": "application/json"
 					},
 					''
+			]);
+			fileList.changeDirectory('/unexist');
+			fakeServer.respond();
+			expect(fileList.getCurrentDirectory()).toEqual('/');
+		});
+		it('switches to root dir when current directory is forbidden', function() {
+			fakeServer.respondWith(/\/index\.php\/apps\/files\/ajax\/list.php\?dir=%2funexist/, [
+				403, {
+					"Content-Type": "application/json"
+				},
+				''
+			]);
+			fileList.changeDirectory('/unexist');
+			fakeServer.respond();
+			expect(fileList.getCurrentDirectory()).toEqual('/');
+		});
+		it('switches to root dir when current directory is unavailable', function() {
+			fakeServer.respondWith(/\/index\.php\/apps\/files\/ajax\/list.php\?dir=%2funexist/, [
+				500, {
+					"Content-Type": "application/json"
+				},
+				''
 			]);
 			fileList.changeDirectory('/unexist');
 			fakeServer.respond();
@@ -1139,7 +1353,7 @@ describe('OCA.Files.FileList tests', function() {
 			fileList.changeDirectory('/subdir/two/three with space/four/five');
 			fakeServer.respond();
 			var changeDirStub = sinon.stub(fileList, 'changeDirectory');
-			fileList.breadcrumb.$el.find('.crumb:eq(0)').click();
+			fileList.breadcrumb.$el.find('.crumb:eq(0)').trigger({type: 'click', which: 1});
 
 			expect(changeDirStub.calledOnce).toEqual(true);
 			expect(changeDirStub.getCall(0).args[0]).toEqual('/');
@@ -1149,7 +1363,7 @@ describe('OCA.Files.FileList tests', function() {
 			fileList.changeDirectory('/subdir/two/three with space/four/five');
 			fakeServer.respond();
 			var changeDirStub = sinon.stub(fileList, 'changeDirectory');
-			fileList.breadcrumb.$el.find('.crumb:eq(3)').click();
+			fileList.breadcrumb.$el.find('.crumb:eq(3)').trigger({type: 'click', which: 1});
 
 			expect(changeDirStub.calledOnce).toEqual(true);
 			expect(changeDirStub.getCall(0).args[0]).toEqual('/subdir/two/three with space');
@@ -1624,6 +1838,36 @@ describe('OCA.Files.FileList tests', function() {
 			expect(fileList.$el.find('.select-all').prop('checked')).toEqual(false);
 			expect(fileList.getSelectedFiles()).toEqual([]);
 		});
+		describe('Disabled selection', function() {
+			beforeEach(function() {
+				fileList._allowSelection = false;
+				fileList.setFiles(testFiles);
+			});
+			it('Does not render checkboxes', function() {
+				expect(fileList.$fileList.find('.selectCheckBox').length).toEqual(0);
+			});
+			it('Does not select a file with Ctrl or Shift if selection is not allowed', function() {
+				var $tr = fileList.findFileEl('One.txt');
+				var $tr2 = fileList.findFileEl('Three.pdf');
+				var e;
+				e = new $.Event('click');
+				e.ctrlKey = true;
+				$tr.find('td.filename .name').trigger(e);
+
+				// click on second entry, does not clear the selection
+				e = new $.Event('click');
+				e.ctrlKey = true;
+				$tr2.find('td.filename .name').trigger(e);
+
+				expect(fileList.getSelectedFiles().length).toEqual(0);
+
+				// deselect now
+				e = new $.Event('click');
+				e.shiftKey = true;
+				$tr2.find('td.filename .name').trigger(e);
+				expect(fileList.getSelectedFiles().length).toEqual(0);
+			});
+		})
 	});
 	describe('File actions', function() {
 		it('Clicking on a file name will trigger default action', function() {

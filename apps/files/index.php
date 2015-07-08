@@ -1,23 +1,31 @@
 <?php
-
 /**
- * ownCloud - ajax frontend
+ * @author Björn Schießle <schiessle@owncloud.com>
+ * @author Frank Karlitschek <frank@owncloud.org>
+ * @author Jakob Sack <mail@jakobsack.de>
+ * @author Jan-Christoph Borchardt <hey@jancborchardt.net>
+ * @author Joas Schilling <nickvergessen@owncloud.com>
+ * @author Jörn Friedrich Dreyer <jfd@butonic.de>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Robin Appelman <icewind@owncloud.com>
+ * @author Roman Geber <rgeber@owncloudapps.com>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
+ * @author Vincent Petry <pvince81@owncloud.com>
  *
- * @author Robin Appelman
- * @copyright 2010 Robin Appelman icewind1991@gmail.com
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE
- * License as published by the Free Software Foundation; either
- * version 3 of the License, or any later version.
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
  *
- * This library is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU AFFERO GENERAL PUBLIC LICENSE for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU Affero General Public
- * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
  *
  */
 
@@ -36,8 +44,17 @@ OCP\Util::addscript('files', 'jquery-visibility');
 OCP\Util::addscript('files', 'filesummary');
 OCP\Util::addscript('files', 'breadcrumb');
 OCP\Util::addscript('files', 'filelist');
+OCP\Util::addscript('files', 'search');
+
+\OCP\Util::addScript('files', 'favoritesfilelist');
+\OCP\Util::addScript('files', 'tagsplugin');
+\OCP\Util::addScript('files', 'favoritesplugin');
+
+\OC_Util::addVendorScript('core', 'handlebars/handlebars');
 
 OCP\App::setActiveNavigationEntry('files_index');
+
+$l = \OC::$server->getL10N('files');
 
 $isIE8 = false;
 preg_match('/MSIE (.*?);/', $_SERVER['HTTP_USER_AGENT'], $matches);
@@ -65,18 +82,22 @@ $config = \OC::$server->getConfig();
 // mostly for the home storage's free space
 $dirInfo = \OC\Files\Filesystem::getFileInfo('/', false);
 $storageInfo=OC_Helper::getStorageInfo('/', $dirInfo);
-// if the encryption app is disabled, than everything is fine (INIT_SUCCESSFUL status code)
-$encryptionInitStatus = 2;
-if (OC_App::isEnabled('files_encryption')) {
-	$session = new \OCA\Encryption\Session(new \OC\Files\View('/'));
-	$encryptionInitStatus = $session->getInitialized();
-}
 
 $nav = new OCP\Template('files', 'appnavigation', '');
 
 function sortNavigationItems($item1, $item2) {
 	return $item1['order'] - $item2['order'];
 }
+
+\OCA\Files\App::getNavigationManager()->add(
+	array(
+		'id' => 'favorites',
+		'appname' => 'files',
+		'script' => 'simplelist.php',
+		'order' => 5,
+		'name' => $l->t('Favorites')
+	)
+);
 
 $navItems = \OCA\Files\App::getNavigationManager()->getAll();
 usort($navItems, 'sortNavigationItems');
@@ -116,11 +137,12 @@ OCP\Util::addscript('files', 'navigation');
 OCP\Util::addscript('files', 'keyboardshortcuts');
 $tmpl = new OCP\Template('files', 'index', 'user');
 $tmpl->assign('usedSpacePercent', (int)$storageInfo['relative']);
+$tmpl->assign('owner', $storageInfo['owner']);
+$tmpl->assign('ownerDisplayName', $storageInfo['ownerDisplayName']);
 $tmpl->assign('isPublic', false);
-$tmpl->assign("encryptedFiles", \OCP\Util::encryptedFiles());
 $tmpl->assign("mailNotificationEnabled", $config->getAppValue('core', 'shareapi_allow_mail_notification', 'no'));
+$tmpl->assign("mailPublicNotificationEnabled", $config->getAppValue('core', 'shareapi_allow_public_notification', 'no'));
 $tmpl->assign("allowShareWithLink", $config->getAppValue('core', 'shareapi_allow_links', 'yes'));
-$tmpl->assign("encryptionInitStatus", $encryptionInitStatus);
 $tmpl->assign('appNavigation', $nav);
 $tmpl->assign('appContents', $contentItems);
 

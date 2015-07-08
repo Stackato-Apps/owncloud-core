@@ -1,12 +1,12 @@
 <?php
+
 /**
  * Copyright (c) 2012 Lukas Reschke <lukas@statuscode.ch>
  * This file is licensed under the Affero General Public License version 3 or
  * later.
  * See the COPYING-README file.
  */
-
-class Test_Util extends PHPUnit_Framework_TestCase {
+class Test_Util extends \Test\TestCase {
 	public function testGetVersion() {
 		$version = \OC_Util::getVersion();
 		$this->assertTrue(is_array($version));
@@ -29,7 +29,7 @@ class Test_Util extends PHPUnit_Framework_TestCase {
 		date_default_timezone_set("UTC");
 
 		$result = OC_Util::formatDate(1350129205);
-		$expected = 'October 13, 2012 11:53';
+		$expected = 'October 13, 2012 at 11:53:25 AM GMT+0';
 		$this->assertEquals($expected, $result);
 
 		$result = OC_Util::formatDate(1102831200, true);
@@ -37,9 +37,61 @@ class Test_Util extends PHPUnit_Framework_TestCase {
 		$this->assertEquals($expected, $result);
 	}
 
+	function testFormatDateWithTZ() {
+		date_default_timezone_set("UTC");
+
+		$result = OC_Util::formatDate(1350129205, false, 'Europe/Berlin');
+		$expected = 'October 13, 2012 at 1:53:25 PM GMT+2';
+		$this->assertEquals($expected, $result);
+	}
+
+	/**
+	 * @expectedException Exception
+	 */
+	function testFormatDateWithInvalidTZ() {
+		OC_Util::formatDate(1350129205, false, 'Mordor/Barad-dûr');
+	}
+
+	public function formatDateWithTZFromSessionData() {
+		return array(
+			array(3, 'October 13, 2012 at 2:53:25 PM GMT+3', 'Etc/GMT-3'),
+			array(15, 'October 13, 2012 at 11:53:25 AM GMT+0', 'UTC'),
+			array(-13, 'October 13, 2012 at 11:53:25 AM GMT+0', 'UTC'),
+			array(9.5, 'October 13, 2012 at 9:23:25 PM GMT+9:30', 'Australia/Darwin'),
+			array(-4.5, 'October 13, 2012 at 7:23:25 AM GMT-4:30', 'America/Caracas'),
+			array(15.5, 'October 13, 2012 at 11:53:25 AM GMT+0', 'UTC'),
+		);
+	}
+
+	/**
+	 * @dataProvider formatDateWithTZFromSessionData
+	 */
+	function testFormatDateWithTZFromSession($offset, $expected, $expectedTimeZone) {
+		date_default_timezone_set("UTC");
+
+		$oldDateTimeFormatter = \OC::$server->query('DateTimeFormatter');
+		\OC::$server->getSession()->set('timezone', $offset);
+
+		$selectedTimeZone = \OC::$server->getDateTimeZone()->getTimeZone(1350129205);
+		$this->assertEquals($expectedTimeZone, $selectedTimeZone->getName());
+		$newDateTimeFormatter = new \OC\DateTimeFormatter($selectedTimeZone, new \OC_L10N('lib', 'en'));
+		$this->setDateFormatter($newDateTimeFormatter);
+
+		$result = OC_Util::formatDate(1350129205, false);
+		$this->assertEquals($expected, $result);
+
+		$this->setDateFormatter($oldDateTimeFormatter);
+	}
+
+	protected function setDateFormatter($formatter) {
+		\OC::$server->registerService('DateTimeFormatter', function ($c) use ($formatter) {
+			return $formatter;
+		});
+	}
+
 	function testCallRegister() {
 		$result = strlen(OC_Util::callRegister());
-		$this->assertEquals(20, $result);
+		$this->assertEquals(30, $result);
 	}
 
 	function testSanitizeHTML() {
@@ -69,7 +121,7 @@ class Test_Util extends PHPUnit_Framework_TestCase {
 		$this->assertEquals('This is a good string without HTML.', $result);
 	}
 
-	function testEncodePath(){
+	function testEncodePath() {
 		$component = '/§#@test%&^ä/-child';
 		$result = OC_Util::encodePath($component);
 		$this->assertEquals("/%C2%A7%23%40test%25%26%5E%C3%A4/-child", $result);
@@ -78,14 +130,6 @@ class Test_Util extends PHPUnit_Framework_TestCase {
 	public function testFileInfoLoaded() {
 		$expected = function_exists('finfo_open');
 		$this->assertEquals($expected, \OC_Util::fileInfoLoaded());
-	}
-
-	public function testIsInternetConnectionEnabled() {
-		\OC_Config::setValue("has_internet_connection", false);
-		$this->assertFalse(\OC_Util::isInternetConnectionEnabled());
-
-		\OC_Config::setValue("has_internet_connection", true);
-		$this->assertTrue(\OC_Util::isInternetConnectionEnabled());
 	}
 
 	function testGenerateRandomBytes() {
@@ -116,16 +160,19 @@ class Test_Util extends PHPUnit_Framework_TestCase {
 
 	function testGetInstanceIdGeneratesValidId() {
 		OC_Config::deleteKey('instanceid');
-		$this->assertStringStartsWith('oc', OC_Util::getInstanceId());
+		$instanceId = OC_Util::getInstanceId();
+		$this->assertStringStartsWith('oc', $instanceId);
+		$matchesRegex = preg_match('/^[a-z0-9]+$/', $instanceId);
+		$this->assertSame(1, $matchesRegex);
 	}
 
 	/**
 	 * Tests that the home storage is not wrapped when no quota exists.
 	 */
 	function testHomeStorageWrapperWithoutQuota() {
-		$user1 = uniqid();
+		$user1 = $this->getUniqueID();
 		\OC_User::createUser($user1, 'test');
-		OC_Preferences::setValue($user1, 'files', 'quota', 'none');
+		\OC::$server->getConfig()->setUserValue($user1, 'files', 'quota', 'none');
 		\OC_User::setUserId($user1);
 
 		\OC_Util::setupFS($user1);
@@ -137,7 +184,7 @@ class Test_Util extends PHPUnit_Framework_TestCase {
 		// clean up
 		\OC_User::setUserId('');
 		\OC_User::deleteUser($user1);
-		OC_Preferences::deleteUser($user1);
+		\OC::$server->getConfig()->deleteAllUserValues($user1);
 		\OC_Util::tearDownFS();
 	}
 
@@ -145,13 +192,11 @@ class Test_Util extends PHPUnit_Framework_TestCase {
 	 * Tests that the home storage is not wrapped when no quota exists.
 	 */
 	function testHomeStorageWrapperWithQuota() {
-		$user1 = uniqid();
+		$user1 = $this->getUniqueID();
 		\OC_User::createUser($user1, 'test');
-		OC_Preferences::setValue($user1, 'files', 'quota', '1024');
+		\OC::$server->getConfig()->setUserValue($user1, 'files', 'quota', '1024');
 		\OC_User::setUserId($user1);
 
-		// make sure that we set up the file system again after the quota was set
-		\OC_Util::tearDownFS();
 		\OC_Util::setupFS($user1);
 
 		$userMount = \OC\Files\Filesystem::getMountManager()->find('/' . $user1 . '/');
@@ -166,21 +211,19 @@ class Test_Util extends PHPUnit_Framework_TestCase {
 		// clean up
 		\OC_User::setUserId('');
 		\OC_User::deleteUser($user1);
-		OC_Preferences::deleteUser($user1);
+		\OC::$server->getConfig()->deleteAllUserValues($user1);
 		\OC_Util::tearDownFS();
 	}
 
 	/**
 	 * @dataProvider baseNameProvider
 	 */
-	public function testBaseName($expected, $file)
-	{
+	public function testBaseName($expected, $file) {
 		$base = \OC_Util::basename($file);
 		$this->assertEquals($expected, $base);
 	}
 
-	public function baseNameProvider()
-	{
+	public function baseNameProvider() {
 		return array(
 			array('public_html', '/home/user/public_html/'),
 			array('public_html', '/home/user/public_html'),
@@ -251,11 +294,11 @@ class Test_Util extends PHPUnit_Framework_TestCase {
 
 		\OC_User::createUser($uid, "passwd");
 
-		foreach($groups as $group) {
+		foreach ($groups as $group) {
 			\OC_Group::createGroup($group);
 		}
 
-		foreach($membership as $group) {
+		foreach ($membership as $group) {
 			\OC_Group::addToGroup($uid, $group);
 		}
 
@@ -271,7 +314,7 @@ class Test_Util extends PHPUnit_Framework_TestCase {
 		\OC_User::deleteUser($uid);
 		\OC_User::setUserId('');
 
-		foreach($groups as $group) {
+		foreach ($groups as $group) {
 			\OC_Group::deleteGroup($group);
 		}
 
@@ -280,7 +323,7 @@ class Test_Util extends PHPUnit_Framework_TestCase {
 
 	}
 
-	public function dataProviderForTestIsSharingDisabledForUser()    {
+	public function dataProviderForTestIsSharingDisabledForUser() {
 		return array(
 			// existing groups, groups the user belong to, groups excluded from sharing, expected result
 			array(array('g1', 'g2', 'g3'), array(), array('g1'), false),
@@ -290,8 +333,8 @@ class Test_Util extends PHPUnit_Framework_TestCase {
 			array(array('g1', 'g2', 'g3'), array('g1', 'g2'), array('g1'), false),
 			array(array('g1', 'g2', 'g3'), array('g1', 'g2'), array('g1', 'g2'), true),
 			array(array('g1', 'g2', 'g3'), array('g1', 'g2'), array('g1', 'g2', 'g3'), true),
-        );
-    }
+		);
+	}
 
 	/**
 	 * Test default apps
@@ -304,15 +347,21 @@ class Test_Util extends PHPUnit_Framework_TestCase {
 		$oldWebRoot = \OC::$WEBROOT;
 		\OC::$WEBROOT = '';
 
-		Dummy_OC_App::setEnabledApps($enabledApps);
+		$appManager = $this->getMock('\OCP\App\IAppManager');
+		$appManager->expects($this->any())
+			->method('isEnabledForUser')
+			->will($this->returnCallback(function($appId) use ($enabledApps){
+				return in_array($appId, $enabledApps);
+		}));
+		Dummy_OC_Util::$appManager = $appManager;
+
 		// need to set a user id to make sure enabled apps are read from cache
-		\OC_User::setUserId(uniqid());
+		\OC_User::setUserId($this->getUniqueID());
 		\OCP\Config::setSystemValue('defaultapp', $defaultAppConfig);
-		$this->assertEquals('http://localhost/' . $expectedPath, \OC_Util::getDefaultPageUrl());
+		$this->assertEquals('http://localhost/' . $expectedPath, Dummy_OC_Util::getDefaultPageUrl());
 
 		// restore old state
 		\OC::$WEBROOT = $oldWebRoot;
-		Dummy_OC_App::restore();
 		\OCP\Config::setSystemValue('defaultapp', $oldDefaultApps);
 		\OC_User::setUserId(null);
 	}
@@ -365,21 +414,37 @@ class Test_Util extends PHPUnit_Framework_TestCase {
 
 		$this->assertFalse(\OCP\Util::needUpgrade());
 	}
+
+	public function testCheckDataDirectoryValidity() {
+		$dataDir = \OCP\Files::tmpFolder();
+		touch($dataDir . '/.ocdata');
+		$errors = \OC_Util::checkDataDirectoryValidity($dataDir);
+		$this->assertEmpty($errors);
+		\OCP\Files::rmdirr($dataDir);
+
+		$dataDir = \OCP\Files::tmpFolder();
+		// no touch
+		$errors = \OC_Util::checkDataDirectoryValidity($dataDir);
+		$this->assertNotEmpty($errors);
+		\OCP\Files::rmdirr($dataDir);
+
+		if (!\OC_Util::runningOnWindows()) {
+			$errors = \OC_Util::checkDataDirectoryValidity('relative/path');
+			$this->assertNotEmpty($errors);
+		}
+	}
 }
 
 /**
- * Dummy OC Apps class to make it possible to override
- * enabled apps
+ * Dummy OC Util class to make it possible to override the app manager
  */
-class Dummy_OC_App extends OC_App {
-	private static $enabledAppsCacheBackup;
+class Dummy_OC_Util extends OC_Util {
+	/**
+	 * @var \OCP\App\IAppManager
+	 */
+	public static $appManager;
 
-	public static function setEnabledApps($enabledApps) {
-		self::$enabledAppsCacheBackup = self::$enabledAppsCache;
-		self::$enabledAppsCache = $enabledApps;
-	}
-
-	public static function restore() {
-		self::$enabledAppsCache = self::$enabledAppsCacheBackup;
+	protected static function getAppManager() {
+		return self::$appManager;
 	}
 }

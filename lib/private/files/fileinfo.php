@@ -1,9 +1,28 @@
 <?php
 /**
- * Copyright (c) 2014 Robin Appelman <icewind@owncloud.com>
- * This file is licensed under the Affero General Public License version 3 or
- * later.
- * See the COPYING-README file.
+ * @author Joas Schilling <nickvergessen@owncloud.com>
+ * @author Lukas Reschke <lukas@owncloud.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Robin Appelman <icewind@owncloud.com>
+ * @author Robin McCorkell <rmccorkell@karoshi.org.uk>
+ * @author Scrutinizer Auto-Fixer <auto-fixer@scrutinizer-ci.com>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
  */
 
 namespace OC\Files;
@@ -30,14 +49,23 @@ class FileInfo implements \OCP\Files\FileInfo, \ArrayAccess {
 	private $internalPath;
 
 	/**
+	 * @var \OCP\Files\Mount\IMountPoint
+	 */
+	private $mount;
+
+	/**
 	 * @param string|boolean $path
 	 * @param Storage\Storage $storage
+	 * @param string $internalPath
+	 * @param array $data
+	 * @param \OCP\Files\Mount\IMountPoint $mount
 	 */
-	public function __construct($path, $storage, $internalPath, $data) {
+	public function __construct($path, $storage, $internalPath, $data, $mount) {
 		$this->path = $path;
 		$this->storage = $storage;
 		$this->internalPath = $internalPath;
 		$this->data = $data;
+		$this->mount = $mount;
 	}
 
 	public function offsetSet($offset, $value) {
@@ -122,7 +150,7 @@ class FileInfo implements \OCP\Files\FileInfo, \ArrayAccess {
 	 * @return int
 	 */
 	public function getSize() {
-		return $this->data['size'];
+		return isset($this->data['size']) ? $this->data['size'] : 0;
 	}
 
 	/**
@@ -150,11 +178,10 @@ class FileInfo implements \OCP\Files\FileInfo, \ArrayAccess {
 	 * @return \OCP\Files\FileInfo::TYPE_FILE|\OCP\Files\FileInfo::TYPE_FOLDER
 	 */
 	public function getType() {
-		if (isset($this->data['type'])) {
-			return $this->data['type'];
-		} else {
-			return $this->getMimetype() === 'httpd/unix-directory' ? self::TYPE_FOLDER : self::TYPE_FILE;
+		if (!isset($this->data['type'])) {
+			$this->data['type'] = ($this->getMimetype() === 'httpd/unix-directory') ? self::TYPE_FOLDER : self::TYPE_FILE;
 		}
+		return $this->data['type'];
 	}
 
 	public function getData() {
@@ -173,14 +200,14 @@ class FileInfo implements \OCP\Files\FileInfo, \ArrayAccess {
 	 * @return bool
 	 */
 	public function isReadable() {
-		return $this->checkPermissions(\OCP\PERMISSION_READ);
+		return $this->checkPermissions(\OCP\Constants::PERMISSION_READ);
 	}
 
 	/**
 	 * @return bool
 	 */
 	public function isUpdateable() {
-		return $this->checkPermissions(\OCP\PERMISSION_UPDATE);
+		return $this->checkPermissions(\OCP\Constants::PERMISSION_UPDATE);
 	}
 
 	/**
@@ -189,25 +216,26 @@ class FileInfo implements \OCP\Files\FileInfo, \ArrayAccess {
 	 * @return bool
 	 */
 	public function isCreatable() {
-		return $this->checkPermissions(\OCP\PERMISSION_CREATE);
+		return $this->checkPermissions(\OCP\Constants::PERMISSION_CREATE);
 	}
 
 	/**
 	 * @return bool
 	 */
 	public function isDeletable() {
-		return $this->checkPermissions(\OCP\PERMISSION_DELETE);
+		return $this->checkPermissions(\OCP\Constants::PERMISSION_DELETE);
 	}
 
 	/**
 	 * @return bool
 	 */
 	public function isShareable() {
-		return $this->checkPermissions(\OCP\PERMISSION_SHARE);
+		return $this->checkPermissions(\OCP\Constants::PERMISSION_SHARE);
 	}
 
 	/**
 	 * Check if a file or folder is shared
+	 *
 	 * @return bool
 	 */
 	public function isShared() {
@@ -229,4 +257,14 @@ class FileInfo implements \OCP\Files\FileInfo, \ArrayAccess {
 
 		return false;
 	}
+
+	/**
+	 * Get the mountpoint the file belongs to
+	 *
+	 * @return \OCP\Files\Mount\IMountPoint
+	 */
+	public function getMountPoint() {
+		return $this->mount;
+	}
 }
+

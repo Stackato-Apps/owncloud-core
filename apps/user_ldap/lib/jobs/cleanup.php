@@ -1,16 +1,34 @@
 <?php
 /**
- * Copyright (c) 2014 Arthur Schiwon <blizzz@owncloud.com>
- * This file is licensed under the Affero General Public License version 3 or
- * later.
- * See the COPYING-README file.
+ * @author Arthur Schiwon <blizzz@owncloud.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
  */
 
 namespace OCA\User_LDAP\Jobs;
 
+use \OC\BackgroundJob\TimedJob;
+use \OCA\user_ldap\User_LDAP;
 use \OCA\user_ldap\User_Proxy;
 use \OCA\user_ldap\lib\Helper;
 use \OCA\user_ldap\lib\LDAP;
+use \OCA\user_ldap\lib\user\DeletedUsersIndex;
+use \OCA\User_LDAP\Mapping\UserMapping;
 
 /**
  * Class CleanUp
@@ -19,36 +37,30 @@ use \OCA\user_ldap\lib\LDAP;
  *
  * @package OCA\user_ldap\lib;
  */
-class CleanUp extends \OC\BackgroundJob\TimedJob {
-	/**
-	 * @var int $limit amount of users that should be checked per run
-	 */
+class CleanUp extends TimedJob {
+	/** @var int $limit amount of users that should be checked per run */
 	protected $limit = 50;
 
-	/**
-	 * @var \OCP\UserInterface $userBackend
-	 */
+	/** @var int $defaultIntervalMin default interval in minutes */
+	protected $defaultIntervalMin = 51;
+
+	/** @var User_LDAP|User_Proxy $userBackend */
 	protected $userBackend;
 
-	/**
-	 * @var \OCP\IConfig $ocConfig
-	 */
+	/** @var \OCP\IConfig $ocConfig */
 	protected $ocConfig;
 
-	/**
-	 * @var \OCP\IDBConnection $db
-	 */
+	/** @var \OCP\IDBConnection $db */
 	protected $db;
 
-	/**
-	 * @var Helper $ldapHelper
-	 */
+	/** @var Helper $ldapHelper */
 	protected $ldapHelper;
 
-	/**
-	 * @var int $defaultIntervalMin default interval in minutes
-	 */
-	protected $defaultIntervalMin = 51;
+	/** @var \OCA\User_LDAP\Mapping\UserMapping */
+	protected $mapping;
+
+	/** @var \OCA\User_LDAP\lib\User\DeletedUsersIndex */
+	protected $dui;
 
 	public function __construct() {
 		$minutes = \OC::$server->getConfig()->getSystemValue(
@@ -72,25 +84,39 @@ class CleanUp extends \OC\BackgroundJob\TimedJob {
 			$this->ldapHelper = new Helper();
 		}
 
-		if(isset($arguments['userBackend'])) {
-			$this->userBackend = $arguments['userBackend'];
-		} else {
-			$this->userBackend =  new User_Proxy(
-				$this->ldapHelper->getServerConfigurationPrefixes(true),
-				new LDAP()
-			);
-		}
-
 		if(isset($arguments['ocConfig'])) {
 			$this->ocConfig = $arguments['ocConfig'];
 		} else {
 			$this->ocConfig = \OC::$server->getConfig();
 		}
 
+		if(isset($arguments['userBackend'])) {
+			$this->userBackend = $arguments['userBackend'];
+		} else {
+			$this->userBackend =  new User_Proxy(
+				$this->ldapHelper->getServerConfigurationPrefixes(true),
+				new LDAP(),
+				$this->ocConfig
+			);
+		}
+
 		if(isset($arguments['db'])) {
 			$this->db = $arguments['db'];
 		} else {
 			$this->db = \OC::$server->getDatabaseConnection();
+		}
+
+		if(isset($arguments['mapping'])) {
+			$this->mapping = $arguments['mapping'];
+		} else {
+			$this->mapping = new UserMapping($this->db);
+		}
+
+		if(isset($arguments['deletedUsersIndex'])) {
+			$this->dui = $arguments['deletedUsersIndex'];
+		} else {
+			$this->dui = new DeletedUsersIndex(
+				$this->ocConfig, $this->db, $this->mapping);
 		}
 	}
 
@@ -104,7 +130,7 @@ class CleanUp extends \OC\BackgroundJob\TimedJob {
 		if(!$this->isCleanUpAllowed()) {
 			return;
 		}
-		$users = $this->getMappedUsers($this->limit, $this->getOffset());
+		$users = $this->mapping->getList($this->getOffset(), $this->limit);
 		if(!is_array($users)) {
 			//something wrong? Let's start from the beginning next time and
 			//abort
@@ -156,7 +182,7 @@ class CleanUp extends \OC\BackgroundJob\TimedJob {
 	 * checks users whether they are still existing
 	 * @param array $users result from getMappedUsers()
 	 */
-	private function checkUsers($users) {
+	private function checkUsers(array $users) {
 		foreach($users as $user) {
 			$this->checkUser($user);
 		}
@@ -166,36 +192,14 @@ class CleanUp extends \OC\BackgroundJob\TimedJob {
 	 * checks whether a user is still existing in LDAP
 	 * @param string[] $user
 	 */
-	private function checkUser($user) {
+	private function checkUser(array $user) {
 		if($this->userBackend->userExistsOnLDAP($user['name'])) {
 			//still available, all good
+
 			return;
 		}
 
-		// TODO FIXME consolidate next line in DeletedUsersIndex
-		// (impractical now, because of class dependencies)
-		$this->ocConfig->setUserValue($user['name'], 'user_ldap', 'isDeleted', '1');
-	}
-
-	/**
-	 * returns a batch of users from the mappings table
-	 * @param int $limit
-	 * @param int $offset
-	 * @return array
-	 */
-	public function getMappedUsers($limit, $offset) {
-		$query = $this->db->prepare('
-			SELECT
-				`ldap_dn` AS `dn`,
-				`owncloud_name` AS `name`,
-				`directory_uuid` AS `uuid`
-			FROM `*PREFIX*ldap_user_mapping`',
-			$limit,
-			$offset
-		);
-
-		$query->execute();
-		return $query->fetchAll();
+		$this->dui->markUser($user['name']);
 	}
 
 	/**
@@ -203,7 +207,7 @@ class CleanUp extends \OC\BackgroundJob\TimedJob {
 	 * @return int
 	 */
 	private function getOffset() {
-		return $this->ocConfig->getAppValue('user_ldap', 'cleanUpJobOffset', 0);
+		return intval($this->ocConfig->getAppValue('user_ldap', 'cleanUpJobOffset', 0));
 	}
 
 	/**

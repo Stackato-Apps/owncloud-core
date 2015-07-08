@@ -1,17 +1,49 @@
 <?php
 /**
- * Copyright (c) 2012 Robin Appelman <icewind@owncloud.com>
- * This file is licensed under the Affero General Public License version 3 or
- * later.
- * See the COPYING-README file.
+ * @author Andreas Fischer <bantu@owncloud.com>
+ * @author Bart Visscher <bartv@thisnet.nl>
+ * @author Björn Schießle <schiessle@owncloud.com>
+ * @author Florin Peter <github@florin-peter.de>
+ * @author Jens-Christian Fischer <jens-christian.fischer@switch.ch>
+ * @author Joas Schilling <nickvergessen@owncloud.com>
+ * @author Jörn Friedrich Dreyer <jfd@butonic.de>
+ * @author Michael Gapczynski <GapczynskiM@gmail.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Robin Appelman <icewind@owncloud.com>
+ * @author Robin McCorkell <rmccorkell@karoshi.org.uk>
+ * @author TheSFReader <TheSFReader@gmail.com>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
+ * @author Victor Dubiniuk <dubiniuk@owncloud.com>
+ * @author Vincent Petry <pvince81@owncloud.com>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
  */
 
 namespace OC\Files\Cache;
 
 /**
- * Metadata cache for the filesystem
+ * Metadata cache for a storage
  *
- * don't use this class directly if you need to get metadata, use \OC\Files\Filesystem::getFileInfo instead
+ * The cache stores the metadata for all files and folders in a storage and is kept up to date trough the following mechanisms:
+ *
+ * - Scanner: scans the storage and updates the cache where needed
+ * - Watcher: checks for changes made to the filesystem outside of the ownCloud instance and rescans files and folder when a change is detected
+ * - Updater: listens to changes made to the filesystem inside of the ownCloud instance and updates the cache where needed
+ * - ChangePropagator: updates the mtime and etags of parent folders whenever a change to the cache is made to the cache by the updater
  */
 class Cache {
 	const NOT_FOUND = 0;
@@ -53,12 +85,20 @@ class Cache {
 		$this->storageCache = new Storage($storage);
 	}
 
+	/**
+	 * Get the numeric storage id for this cache's storage
+	 *
+	 * @return int
+	 */
 	public function getNumericStorageId() {
 		return $this->storageCache->getNumericId();
 	}
 
 	/**
-	 * normalize mimetypes
+	 * Get the numeric id for a mimetype
+	 *
+	 * Mimetypes are stored as integers in the cache to prevent duplicated data of the (usually) fairly limited amount of unique mimetypes
+	 * If the supplied mimetype does not yet have a numeric id a new one will be generated
 	 *
 	 * @param string $mime
 	 * @return int
@@ -71,22 +111,30 @@ class Cache {
 		if (empty(self::$mimetypeIds)) {
 			$this->loadMimetypes();
 		}
-		
+
 		if (!isset(self::$mimetypeIds[$mime])) {
-			try{
-				$result = \OC_DB::executeAudited('INSERT INTO `*PREFIX*mimetypes`(`mimetype`) VALUES(?)', array($mime));
-				self::$mimetypeIds[$mime] = \OC_DB::insertid('*PREFIX*mimetypes');
-				self::$mimetypes[self::$mimetypeIds[$mime]] = $mime;
-			}
-			catch (\Doctrine\DBAL\DBALException $e){
+			try {
+				$connection = \OC_DB::getConnection();
+				$connection->insertIfNotExist('*PREFIX*mimetypes', [
+					'mimetype'	=> $mime,
+				]);
+				$this->loadMimetypes();
+			} catch (\Doctrine\DBAL\DBALException $e) {
 				\OC_Log::write('core', 'Exception during mimetype insertion: ' . $e->getmessage(), \OC_Log::DEBUG);
 				return -1;
 			}
-		} 
-				
+		}
+
 		return self::$mimetypeIds[$mime];
 	}
 
+
+	/**
+	 * Get the mimetype (as string) from a mimetype id
+	 *
+	 * @param int $id
+	 * @return string | null the mimetype for the id or null if the id is not known
+	 */
 	public function getMimetype($id) {
 		if (empty(self::$mimetypes)) {
 			$this->loadMimetypes();
@@ -95,21 +143,48 @@ class Cache {
 		return isset(self::$mimetypes[$id]) ? self::$mimetypes[$id] : null;
 	}
 
-	public function loadMimetypes(){
-			$result = \OC_DB::executeAudited('SELECT `id`, `mimetype` FROM `*PREFIX*mimetypes`', array());
-			if ($result) {
-				while ($row = $result->fetchRow()) {
-					self::$mimetypeIds[$row['mimetype']] = $row['id'];
-					self::$mimetypes[$row['id']] = $row['mimetype'];
-				}
+	/**
+	 * Load all known mimetypes and mimetype ids from the database
+	 *
+	 * @throws \OC\DatabaseException
+	 */
+	public function loadMimetypes() {
+		self::$mimetypeIds = self::$mimetypes = array();
+
+		$result = \OC_DB::executeAudited('SELECT `id`, `mimetype` FROM `*PREFIX*mimetypes`', array());
+		if ($result) {
+			while ($row = $result->fetchRow()) {
+				self::$mimetypeIds[$row['mimetype']] = $row['id'];
+				self::$mimetypes[$row['id']] = $row['mimetype'];
 			}
+		}
 	}
 
 	/**
 	 * get the stored metadata of a file or folder
 	 *
-	 * @param string/int $file
-	 * @return array|false
+	 * the returned cache entry contains at least the following values:
+	 * [
+	 * 		'fileid' => int, the numeric id of a file (see getId)
+	 * 		'storage' => int, the numeric id of the storage the file is stored on
+	 * 		'path' => string, the path of the file within the storage ('foo/bar.txt')
+	 * 		'name' => string, the basename of a file ('bar.txt)
+	 * 		'mimetype' => string, the full mimetype of the file ('text/plain')
+	 * 		'mimepart' => string, the first half of the mimetype ('text')
+	 * 		'size' => int, the size of the file or folder in bytes
+	 * 		'mtime' => int, the last modified date of the file as unix timestamp as shown in the ui
+	 * 		'storage_mtime' => int, the last modified date of the file as unix timestamp as stored on the storage
+	 * 			Note that when a file is updated we also update the mtime of all parent folders to make it visible to the user which folder has had updates most recently
+	 * 			This can differ from the mtime on the underlying storage which usually only changes when a direct child is added, removed or renamed
+	 * 		'etag' => string, the etag for the file
+	 * 			An etag is used for change detection of files and folders, an etag of a file changes whenever the content of the file changes
+	 * 			Etag for folders change whenever a file in the folder has changed
+	 * 		'permissions' int, the permissions for the file stored as bitwise combination of \OCP\PERMISSION_READ, \OCP\PERMISSION_CREATE
+	 * 			\OCP\PERMISSION_UPDATE, \OCP\PERMISSION_DELETE and \OCP\PERMISSION_SHARE
+	 * ]
+	 *
+	 * @param string | int $file either the path of a file or folder or the file id for a file or folder
+	 * @return array|false the cache entry as array of false if the file is not found in the cache
 	 */
 	public function get($file) {
 		if (is_string($file) or $file == '') {
@@ -123,7 +198,7 @@ class Cache {
 			$params = array($file);
 		}
 		$sql = 'SELECT `fileid`, `storage`, `path`, `parent`, `name`, `mimetype`, `mimepart`, `size`, `mtime`,
-					   `storage_mtime`, `encrypted`, `unencrypted_size`, `etag`, `permissions`
+					   `storage_mtime`, `encrypted`, `etag`, `permissions`
 				FROM `*PREFIX*filecache` ' . $where;
 		$result = \OC_DB::executeAudited($sql, $params);
 		$data = $result->fetchRow();
@@ -135,7 +210,7 @@ class Cache {
 		}
 
 		//merge partial data
-		if (!$data and  is_string($file)) {
+		if (!$data and is_string($file)) {
 			if (isset($this->partial[$file])) {
 				$data = $this->partial[$file];
 			}
@@ -146,7 +221,6 @@ class Cache {
 			$data['mtime'] = (int)$data['mtime'];
 			$data['storage_mtime'] = (int)$data['storage_mtime'];
 			$data['encrypted'] = (bool)$data['encrypted'];
-            $data['unencrypted_size'] = 0 + $data['unencrypted_size'];
 			$data['storage'] = $this->storageId;
 			$data['mimetype'] = $this->getMimetype($data['mimetype']);
 			$data['mimepart'] = $this->getMimetype($data['mimepart']);
@@ -179,9 +253,9 @@ class Cache {
 	public function getFolderContentsById($fileId) {
 		if ($fileId > -1) {
 			$sql = 'SELECT `fileid`, `storage`, `path`, `parent`, `name`, `mimetype`, `mimepart`, `size`, `mtime`,
-						   `storage_mtime`, `encrypted`, `unencrypted_size`, `etag`, `permissions`
+						   `storage_mtime`, `encrypted`, `etag`, `permissions`
 					FROM `*PREFIX*filecache` WHERE `parent` = ? ORDER BY `name` ASC';
-			$result = \OC_DB::executeAudited($sql,array($fileId));
+			$result = \OC_DB::executeAudited($sql, array($fileId));
 			$files = $result->fetchAll();
 			foreach ($files as &$file) {
 				$file['mimetype'] = $this->getMimetype($file['mimetype']);
@@ -189,11 +263,10 @@ class Cache {
 				if ($file['storage_mtime'] == 0) {
 					$file['storage_mtime'] = $file['mtime'];
 				}
-				if ($file['encrypted'] or ($file['unencrypted_size'] > 0 and $file['mimetype'] === 'httpd/unix-directory')) {
-					$file['encrypted_size'] = $file['size'];
-					$file['size'] = $file['unencrypted_size'];
-				}
 				$file['permissions'] = (int)$file['permissions'];
+				$file['mtime'] = (int)$file['mtime'];
+				$file['storage_mtime'] = (int)$file['storage_mtime'];
+				$file['size'] = 0 + $file['size'];
 			}
 			return $files;
 		} else {
@@ -208,6 +281,7 @@ class Cache {
 	 * @param array $data
 	 *
 	 * @return int file id
+	 * @throws \RuntimeException
 	 */
 	public function put($file, array $data) {
 		if (($id = $this->getId($file)) > -1) {
@@ -237,30 +311,42 @@ class Cache {
 			list($queryParts, $params) = $this->buildParts($data);
 			$queryParts[] = '`storage`';
 			$params[] = $this->getNumericStorageId();
-			$valuesPlaceholder = array_fill(0, count($queryParts), '?');
 
-			$sql = 'INSERT INTO `*PREFIX*filecache` (' . implode(', ', $queryParts) . ')'
-				. ' VALUES (' . implode(', ', $valuesPlaceholder) . ')';
-			\OC_DB::executeAudited($sql, $params);
+			$queryParts = array_map(function($item) {
+				return trim($item, "`");
+			}, $queryParts);
+			$values = array_combine($queryParts, $params);
+			if (\OC::$server->getDatabaseConnection()->insertIfNotExist('*PREFIX*filecache', $values, [
+				'storage',
+				'path_hash',
+			])) {
+				return (int)\OC_DB::insertid('*PREFIX*filecache');
+			}
 
-			return (int)\OC_DB::insertid('*PREFIX*filecache');
+			// The file was created in the mean time
+			if (($id = $this->getId($file)) > -1) {
+				$this->update($id, $data);
+				return $id;
+			} else {
+				throw new \RuntimeException('File entry could not be inserted with insertIfNotExist() but could also not be selected with getId() in order to perform an update. Please try again.');
+			}
 		}
 	}
 
 	/**
-	 * update the metadata in the cache
+	 * update the metadata of an existing file or folder in the cache
 	 *
-	 * @param int $id
-	 * @param array $data
+	 * @param int $id the fileid of the existing file or folder
+	 * @param array $data [$key => $value] the metadata to update, only the fields provided in the array will be updated, non-provided values will remain unchanged
 	 */
 	public function update($id, array $data) {
 
-		if(isset($data['path'])) {
+		if (isset($data['path'])) {
 			// normalize path
 			$data['path'] = $this->normalize($data['path']);
 		}
 
-		if(isset($data['name'])) {
+		if (isset($data['name'])) {
 			// normalize path
 			$data['name'] = $this->normalize($data['name']);
 		}
@@ -283,11 +369,13 @@ class Cache {
 	 * extract query parts and params array from data array
 	 *
 	 * @param array $data
-	 * @return array
+	 * @return array [$queryParts, $params]
+	 * 		$queryParts: string[], the (escaped) column names to be set in the query
+	 *		$params: mixed[], the new values for the columns, to be passed as params to the query
 	 */
-	function buildParts(array $data) {
+	protected function buildParts(array $data) {
 		$fields = array(
-			'path', 'parent', 'name', 'mimetype', 'size', 'mtime', 'storage_mtime', 'encrypted', 'unencrypted_size',
+			'path', 'parent', 'name', 'mimetype', 'size', 'mtime', 'storage_mtime', 'encrypted',
 			'etag', 'permissions');
 		$params = array();
 		$queryParts = array();
@@ -318,6 +406,10 @@ class Cache {
 
 	/**
 	 * get the file id for a file
+	 *
+	 * A file id is a numeric id for a file or folder that's unique within an owncloud instance which stays the same for the lifetime of a file
+	 *
+	 * File ids are easiest way for apps to store references to a file since unlike paths they are not affected by renames or sharing
 	 *
 	 * @param string $file
 	 * @return int
@@ -368,18 +460,44 @@ class Cache {
 	/**
 	 * remove a file or folder from the cache
 	 *
+	 * when removing a folder from the cache all files and folders inside the folder will be removed as well
+	 *
 	 * @param string $file
 	 */
 	public function remove($file) {
 		$entry = $this->get($file);
-		if ($entry['mimetype'] === 'httpd/unix-directory') {
-			$children = $this->getFolderContents($file);
-			foreach ($children as $child) {
-				$this->remove($child['path']);
-			}
-		}
-		
 		$sql = 'DELETE FROM `*PREFIX*filecache` WHERE `fileid` = ?';
+		\OC_DB::executeAudited($sql, array($entry['fileid']));
+		if ($entry['mimetype'] === 'httpd/unix-directory') {
+			$this->removeChildren($entry);
+		}
+	}
+
+	/**
+	 * Get all sub folders of a folder
+	 *
+	 * @param array $entry the cache entry of the folder to get the subfolders for
+	 * @return array[] the cache entries for the subfolders
+	 */
+	private function getSubFolders($entry) {
+		$children = $this->getFolderContentsById($entry['fileid']);
+		return array_filter($children, function ($child) {
+			return $child['mimetype'] === 'httpd/unix-directory';
+		});
+	}
+
+	/**
+	 * Recursively remove all children of a folder
+	 *
+	 * @param array $entry the cache entry of the folder to remove the children of
+	 * @throws \OC\DatabaseException
+	 */
+	private function removeChildren($entry) {
+		$subFolders = $this->getSubFolders($entry);
+		foreach ($subFolders as $folder) {
+			$this->removeChildren($folder);
+		}
+		$sql = 'DELETE FROM `*PREFIX*filecache` WHERE `parent` = ?';
 		\OC_DB::executeAudited($sql, array($entry['fileid']));
 	}
 
@@ -390,30 +508,57 @@ class Cache {
 	 * @param string $target
 	 */
 	public function move($source, $target) {
-		// normalize source and target
-		$source = $this->normalize($source);
-		$target = $this->normalize($target);
+		$this->moveFromCache($this, $source, $target);
+	}
 
-		$sourceData = $this->get($source);
+	/**
+	 * Get the storage id and path needed for a move
+	 *
+	 * @param string $path
+	 * @return array [$storageId, $internalPath]
+	 */
+	protected function getMoveInfo($path) {
+		return [$this->getNumericStorageId(), $path];
+	}
+
+	/**
+	 * Move a file or folder in the cache
+	 *
+	 * @param \OC\Files\Cache\Cache $sourceCache
+	 * @param string $sourcePath
+	 * @param string $targetPath
+	 * @throws \OC\DatabaseException
+	 */
+	public function moveFromCache(Cache $sourceCache, $sourcePath, $targetPath) {
+		// normalize source and target
+		$sourcePath = $this->normalize($sourcePath);
+		$targetPath = $this->normalize($targetPath);
+
+		$sourceData = $sourceCache->get($sourcePath);
 		$sourceId = $sourceData['fileid'];
-		$newParentId = $this->getParentId($target);
+		$newParentId = $this->getParentId($targetPath);
+
+		list($sourceStorageId, $sourcePath) = $sourceCache->getMoveInfo($sourcePath);
+		list($targetStorageId, $targetPath) = $this->getMoveInfo($targetPath);
 
 		if ($sourceData['mimetype'] === 'httpd/unix-directory') {
 			//find all child entries
 			$sql = 'SELECT `path`, `fileid` FROM `*PREFIX*filecache` WHERE `storage` = ? AND `path` LIKE ?';
-			$result = \OC_DB::executeAudited($sql, array($this->getNumericStorageId(), $source . '/%'));
+			$result = \OC_DB::executeAudited($sql, [$sourceStorageId, $sourcePath . '/%']);
 			$childEntries = $result->fetchAll();
-			$sourceLength = strlen($source);
-			$query = \OC_DB::prepare('UPDATE `*PREFIX*filecache` SET `path` = ?, `path_hash` = ? WHERE `fileid` = ?');
+			$sourceLength = strlen($sourcePath);
+			\OC_DB::beginTransaction();
+			$query = \OC_DB::prepare('UPDATE `*PREFIX*filecache` SET `storage` = ?, `path` = ?, `path_hash` = ? WHERE `fileid` = ?');
 
 			foreach ($childEntries as $child) {
-				$targetPath = $target . substr($child['path'], $sourceLength);
-				\OC_DB::executeAudited($query, array($targetPath, md5($targetPath), $child['fileid']));
+				$newTargetPath = $targetPath . substr($child['path'], $sourceLength);
+				\OC_DB::executeAudited($query, [$targetStorageId, $newTargetPath, md5($newTargetPath), $child['fileid']]);
 			}
+			\OC_DB::commit();
 		}
 
-		$sql = 'UPDATE `*PREFIX*filecache` SET `path` = ?, `path_hash` = ?, `name` = ?, `parent` =? WHERE `fileid` = ?';
-		\OC_DB::executeAudited($sql, array($target, md5($target), basename($target), $newParentId, $sourceId));
+		$sql = 'UPDATE `*PREFIX*filecache` SET `storage` =  ?, `path` = ?, `path_hash` = ?, `name` = ?, `parent` =? WHERE `fileid` = ?';
+		\OC_DB::executeAudited($sql, [$targetStorageId, $targetPath, md5($targetPath), basename($targetPath), $newParentId, $sourceId]);
 	}
 
 	/**
@@ -428,9 +573,16 @@ class Cache {
 	}
 
 	/**
+	 * Get the scan status of a file
+	 *
+	 * - Cache::NOT_FOUND: File is not in the cache
+	 * - Cache::PARTIAL: File is not stored in the cache but some incomplete data is known
+	 * - Cache::SHALLOW: The folder and it's direct children are in the cache but not all sub folders are fully scanned
+	 * - Cache::COMPLETE: The file or folder, with all it's children) are fully scanned
+	 *
 	 * @param string $file
 	 *
-	 * @return int, Cache::NOT_FOUND, Cache::PARTIAL, Cache::SHALLOW or Cache::COMPLETE
+	 * @return int Cache::NOT_FOUND, Cache::PARTIAL, Cache::SHALLOW or Cache::COMPLETE
 	 */
 	public function getStatus($file) {
 		// normalize file
@@ -457,8 +609,8 @@ class Cache {
 	/**
 	 * search for files matching $pattern
 	 *
-	 * @param string $pattern
-	 * @return array an array of file data
+	 * @param string $pattern the search pattern using SQL search syntax (e.g. '%searchstring%')
+	 * @return array an array of cache entries where the name matches the search pattern
 	 */
 	public function search($pattern) {
 
@@ -469,7 +621,7 @@ class Cache {
 		$sql = '
 			SELECT `fileid`, `storage`, `path`, `parent`, `name`,
 				`mimetype`, `mimepart`, `size`, `mtime`, `encrypted`,
-				`unencrypted_size`, `etag`, `permissions`
+				`etag`, `permissions`
 			FROM `*PREFIX*filecache`
 			WHERE `storage` = ? AND `name` ILIKE ?';
 		$result = \OC_DB::executeAudited($sql,
@@ -488,8 +640,9 @@ class Cache {
 	/**
 	 * search for files by mimetype
 	 *
-	 * @param string $mimetype
-	 * @return array
+	 * @param string $mimetype either a full mimetype to search ('text/plain') or only the first part of a mimetype ('image')
+	 * 		where it will search for all mimetypes in the group ('image/*')
+	 * @return array  an array of cache entries where the mimetype matches the search
 	 */
 	public function searchByMime($mimetype) {
 		if (strpos($mimetype, '/')) {
@@ -497,7 +650,7 @@ class Cache {
 		} else {
 			$where = '`mimepart` = ?';
 		}
-		$sql = 'SELECT `fileid`, `storage`, `path`, `parent`, `name`, `mimetype`, `mimepart`, `size`, `mtime`, `encrypted`, `unencrypted_size`, `etag`, `permissions`
+		$sql = 'SELECT `fileid`, `storage`, `path`, `parent`, `name`, `mimetype`, `mimepart`, `size`, `mtime`, `encrypted`, `etag`, `permissions`
 				FROM `*PREFIX*filecache` WHERE ' . $where . ' AND `storage` = ?';
 		$mimetype = $this->getMimetypeId($mimetype);
 		$result = \OC_DB::executeAudited($sql, array($mimetype, $this->getNumericStorageId()));
@@ -511,7 +664,52 @@ class Cache {
 	}
 
 	/**
-	 * update the folder size and the size of all parent folders
+	 * Search for files by tag of a given users.
+	 *
+	 * Note that every user can tag files differently.
+	 *
+	 * @param string|int $tag name or tag id
+	 * @param string $userId owner of the tags
+	 * @return array file data
+	 */
+	public function searchByTag($tag, $userId) {
+		$sql = 'SELECT `fileid`, `storage`, `path`, `parent`, `name`, ' .
+			'`mimetype`, `mimepart`, `size`, `mtime`, ' .
+			'`encrypted`, `etag`, `permissions` ' .
+			'FROM `*PREFIX*filecache` `file`, ' .
+			'`*PREFIX*vcategory_to_object` `tagmap`, ' .
+			'`*PREFIX*vcategory` `tag` ' .
+			// JOIN filecache to vcategory_to_object
+			'WHERE `file`.`fileid` = `tagmap`.`objid` ' .
+			// JOIN vcategory_to_object to vcategory
+			'AND `tagmap`.`type` = `tag`.`type` ' .
+			'AND `tagmap`.`categoryid` = `tag`.`id` ' .
+			// conditions
+			'AND `file`.`storage` = ? ' .
+			'AND `tag`.`type` = \'files\' ' .
+			'AND `tag`.`uid` = ? ';
+		if (is_int($tag)) {
+			$sql .= 'AND `tag`.`id` = ? ';
+		} else {
+			$sql .= 'AND `tag`.`category` = ? ';
+		}
+		$result = \OC_DB::executeAudited(
+			$sql,
+			array(
+				$this->getNumericStorageId(),
+				$userId,
+				$tag
+			)
+		);
+		$files = array();
+		while ($row = $result->fetchRow()) {
+			$files[] = $row;
+		}
+		return $files;
+	}
+
+	/**
+	 * Re-calculate the folder size and the size of all parent folders
 	 *
 	 * @param string|boolean $path
 	 * @param array $data (optional) meta data of the folder
@@ -528,7 +726,7 @@ class Cache {
 	}
 
 	/**
-	 * get the size of a folder and set it in the cache
+	 * calculate the size of a folder and set it in the cache
 	 *
 	 * @param string $path
 	 * @param array $entry (optional) meta data of the folder
@@ -539,18 +737,17 @@ class Cache {
 		if (is_null($entry) or !isset($entry['fileid'])) {
 			$entry = $this->get($path);
 		}
-		if ($entry && $entry['mimetype'] === 'httpd/unix-directory') {
+		if (isset($entry['mimetype']) && $entry['mimetype'] === 'httpd/unix-directory') {
 			$id = $entry['fileid'];
-			$sql = 'SELECT SUM(`size`) AS f1, MIN(`size`) AS f2, ' .
-				'SUM(`unencrypted_size`) AS f3 ' .
+			$sql = 'SELECT SUM(`size`) AS f1, MIN(`size`) AS f2 ' .
 				'FROM `*PREFIX*filecache` ' .
 				'WHERE `parent` = ? AND `storage` = ?';
 			$result = \OC_DB::executeAudited($sql, array($id, $this->getNumericStorageId()));
 			if ($row = $result->fetchRow()) {
-				list($sum, $min, $unencryptedSum) = array_values($row);
+				$result->closeCursor();
+				list($sum, $min) = array_values($row);
 				$sum = 0 + $sum;
 				$min = 0 + $min;
-				$unencryptedSum = 0 + $unencryptedSum;
 				if ($min === -1) {
 					$totalSize = $min;
 				} else {
@@ -560,15 +757,11 @@ class Cache {
 				if ($entry['size'] !== $totalSize) {
 					$update['size'] = $totalSize;
 				}
-				if (!isset($entry['unencrypted_size']) or $entry['unencrypted_size'] !== $unencryptedSum) {
-					$update['unencrypted_size'] = $unencryptedSum;
-				}
 				if (count($update) > 0) {
 					$this->update($id, $update);
 				}
-				if ($totalSize !== -1 and $unencryptedSum > 0) {
-					$totalSize = $unencryptedSum;
-				}
+			} else {
+				$result->closeCursor();
 			}
 		}
 		return $totalSize;
@@ -592,7 +785,7 @@ class Cache {
 	/**
 	 * find a folder in the cache which has not been fully scanned
 	 *
-	 * If multiply incomplete folders are in the cache, the one with the highest id will be returned,
+	 * If multiple incomplete folders are in the cache, the one with the highest id will be returned,
 	 * use the one with the highest id gives the best result with the background scanner, since that is most
 	 * likely the folder where we stopped scanning previously
 	 *
@@ -600,7 +793,7 @@ class Cache {
 	 */
 	public function getIncomplete() {
 		$query = \OC_DB::prepare('SELECT `path` FROM `*PREFIX*filecache`'
-			. ' WHERE `storage` = ? AND `size` = -1 ORDER BY `fileid` DESC',1);
+			. ' WHERE `storage` = ? AND `size` = -1 ORDER BY `fileid` DESC', 1);
 		$result = \OC_DB::executeAudited($query, array($this->getNumericStorageId()));
 		if ($row = $result->fetchRow()) {
 			return $row['path'];
@@ -610,10 +803,10 @@ class Cache {
 	}
 
 	/**
-	 * get the path of a file on this storage by it's id
+	 * get the path of a file on this storage by it's file id
 	 *
-	 * @param int $id
-	 * @return string|null
+	 * @param int $id the file id of the file or folder to search
+	 * @return string|null the path of the file (relative to the storage) or null if a file with the given id does not exists within this cache
 	 */
 	public function getPathById($id) {
 		$sql = 'SELECT `path` FROM `*PREFIX*filecache` WHERE `fileid` = ? AND `storage` = ?';
@@ -635,7 +828,8 @@ class Cache {
 	 * instead does a global search in the cache table
 	 *
 	 * @param int $id
-	 * @return array, first element holding the storage id, second the path
+	 * @deprecated use getPathById() instead
+	 * @return array first element holding the storage id, second the path
 	 */
 	static public function getById($id) {
 		$sql = 'SELECT `storage`, `path` FROM `*PREFIX*filecache` WHERE `fileid` = ?';
@@ -656,11 +850,12 @@ class Cache {
 
 	/**
 	 * normalize the given path
+	 *
 	 * @param string $path
 	 * @return string
 	 */
 	public function normalize($path) {
 
-		return \OC_Util::normalizeUnicode($path);
+		return trim(\OC_Util::normalizeUnicode($path), '/');
 	}
 }

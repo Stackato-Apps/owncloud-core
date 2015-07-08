@@ -1,63 +1,95 @@
 <?php
-
 /**
- * ownCloud
+ * @author Aldo "xoen" Giambelluca <xoen@xoen.org>
+ * @author Arthur Schiwon <blizzz@owncloud.com>
+ * @author Bart Visscher <bartv@thisnet.nl>
+ * @author Björn Schießle <schiessle@owncloud.com>
+ * @author Dominik Schmidt <dev@dominik-schmidt.de>
+ * @author Georg Ehrke <georg@owncloud.com>
+ * @author Jakob Sack <mail@jakobsack.de>
+ * @author Joas Schilling <nickvergessen@owncloud.com>
+ * @author Jörn Friedrich Dreyer <jfd@butonic.de>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Robin Appelman <icewind@owncloud.com>
+ * @author Robin McCorkell <rmccorkell@karoshi.org.uk>
+ * @author Sam Tuke <mail@samtuke.com>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
+ * @author Tigran Mkrtchyan <tigran.mkrtchyan@desy.de>
  *
- * @author Frank Karlitschek
- * @author Dominik Schmidt
- * @copyright 2012 Frank Karlitschek frank@owncloud.org
- * @copyright 2011 Dominik Schmidt dev@dominik-schmidt.de
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE
- * License as published by the Free Software Foundation; either
- * version 3 of the License, or any later version.
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
  *
- * This library is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU AFFERO GENERAL PUBLIC LICENSE for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU Affero General Public
- * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
  *
  */
 
 /**
  * error code for functions not provided by the user backend
+ * @deprecated Use \OC_User_Backend::NOT_IMPLEMENTED instead
  */
 define('OC_USER_BACKEND_NOT_IMPLEMENTED',   -501);
 
 /**
  * actions that user backends can define
  */
-define('OC_USER_BACKEND_CREATE_USER',       0x00000001);
-define('OC_USER_BACKEND_SET_PASSWORD',      0x00000010);
-define('OC_USER_BACKEND_CHECK_PASSWORD',    0x00000100);
-define('OC_USER_BACKEND_GET_HOME',			0x00001000);
-define('OC_USER_BACKEND_GET_DISPLAYNAME',	0x00010000);
-define('OC_USER_BACKEND_SET_DISPLAYNAME',	0x00100000);
-define('OC_USER_BACKEND_PROVIDE_AVATAR',	0x01000000);
-define('OC_USER_BACKEND_COUNT_USERS',		0x10000000);
-//more actions cannot be defined without breaking 32bit platforms!
+/** @deprecated Use \OC_User_Backend::CREATE_USER instead */
+define('OC_USER_BACKEND_CREATE_USER',       1 << 0);
+/** @deprecated Use \OC_User_Backend::SET_PASSWORD instead */
+define('OC_USER_BACKEND_SET_PASSWORD',      1 << 4);
+/** @deprecated Use \OC_User_Backend::CHECK_PASSWORD instead */
+define('OC_USER_BACKEND_CHECK_PASSWORD',    1 << 8);
+/** @deprecated Use \OC_User_Backend::GET_HOME instead */
+define('OC_USER_BACKEND_GET_HOME',          1 << 12);
+/** @deprecated Use \OC_User_Backend::GET_DISPLAYNAME instead */
+define('OC_USER_BACKEND_GET_DISPLAYNAME',   1 << 16);
+/** @deprecated Use \OC_User_Backend::SET_DISPLAYNAME instead */
+define('OC_USER_BACKEND_SET_DISPLAYNAME',   1 << 20);
+/** @deprecated Use \OC_User_Backend::PROVIDE_AVATAR instead */
+define('OC_USER_BACKEND_PROVIDE_AVATAR',    1 << 24);
+/** @deprecated Use \OC_User_Backend::COUNT_USERS instead */
+define('OC_USER_BACKEND_COUNT_USERS',       1 << 28);
 
 /**
  * Abstract base class for user management. Provides methods for querying backend
  * capabilities.
- *
- * Subclass this for your own backends, and see OC_User_Example for descriptions
  */
 abstract class OC_User_Backend implements OC_User_Interface {
+	/**
+	 * error code for functions not provided by the user backend
+	 */
+	const NOT_IMPLEMENTED = -501;
+
+	/**
+	 * actions that user backends can define
+	 */
+	const CREATE_USER		= 1;			// 1 << 0
+	const SET_PASSWORD		= 16;			// 1 << 4
+	const CHECK_PASSWORD	= 256;			// 1 << 8
+	const GET_HOME			= 4096;			// 1 << 12
+	const GET_DISPLAYNAME	= 65536;		// 1 << 16
+	const SET_DISPLAYNAME	= 1048576;		// 1 << 20
+	const PROVIDE_AVATAR	= 16777216;		// 1 << 24
+	const COUNT_USERS		= 268435456;	// 1 << 28
 
 	protected $possibleActions = array(
-		OC_USER_BACKEND_CREATE_USER => 'createUser',
-		OC_USER_BACKEND_SET_PASSWORD => 'setPassword',
-		OC_USER_BACKEND_CHECK_PASSWORD => 'checkPassword',
-		OC_USER_BACKEND_GET_HOME => 'getHome',
-		OC_USER_BACKEND_GET_DISPLAYNAME => 'getDisplayName',
-		OC_USER_BACKEND_SET_DISPLAYNAME => 'setDisplayName',
-		OC_USER_BACKEND_PROVIDE_AVATAR => 'canChangeAvatar',
-		OC_USER_BACKEND_COUNT_USERS => 'countUsers',
+		self::CREATE_USER => 'createUser',
+		self::SET_PASSWORD => 'setPassword',
+		self::CHECK_PASSWORD => 'checkPassword',
+		self::GET_HOME => 'getHome',
+		self::GET_DISPLAYNAME => 'getDisplayName',
+		self::SET_DISPLAYNAME => 'setDisplayName',
+		self::PROVIDE_AVATAR => 'canChangeAvatar',
+		self::COUNT_USERS => 'countUsers',
 	);
 
 	/**
@@ -65,7 +97,7 @@ abstract class OC_User_Backend implements OC_User_Interface {
 	* @return int bitwise-or'ed actions
 	*
 	* Returns the supported actions as int to be
-	* compared with OC_USER_BACKEND_CREATE_USER etc.
+	* compared with self::CREATE_USER etc.
 	*/
 	public function getSupportedActions() {
 		$actions = 0;
@@ -84,7 +116,7 @@ abstract class OC_User_Backend implements OC_User_Interface {
 	* @return boolean
 	*
 	* Returns the supported actions as int to be
-	* compared with OC_USER_BACKEND_CREATE_USER etc.
+	* compared with self::CREATE_USER etc.
 	*/
 	public function implementsActions($actions) {
 		return (bool)($this->getSupportedActions() & $actions);
@@ -102,11 +134,13 @@ abstract class OC_User_Backend implements OC_User_Interface {
 	}
 
 	/**
-	* Get a list of all users
-	* @return array an array of all uids
-	*
-	* Get a list of all users.
-	*/
+	 * Get a list of all users
+	 *
+	 * @param string $search
+	 * @param null|int $limit
+	 * @param null|int $offset
+	 * @return string[] an array of all uids
+	 */
 	public function getUsers($search = '', $limit = null, $offset = null) {
 		return array();
 	}
@@ -139,10 +173,12 @@ abstract class OC_User_Backend implements OC_User_Interface {
 	}
 
 	/**
-	 * Get a list of all display names
-	 * @return array an array of  all displayNames (value) and the corresponding uids (key)
-	 *
 	 * Get a list of all display names and user ids.
+	 *
+	 * @param string $search
+	 * @param string|null $limit
+	 * @param string|null $offset
+	 * @return array an array of all displayNames (value) and the corresponding uids (key)
 	 */
 	public function getDisplayNames($search = '', $limit = null, $offset = null) {
 		$displayNames = array();

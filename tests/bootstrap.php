@@ -1,6 +1,4 @@
 <?php
-
-
 define('PHPUNIT_RUN', 1);
 
 $configDir = getenv('CONFIG_DIR');
@@ -20,4 +18,3 @@ if (!class_exists('PHPUnit_Framework_TestCase')) {
 
 OC_Hook::clear();
 OC_Log::$enabled = false;
-OC_FileProxy::clearProxies();

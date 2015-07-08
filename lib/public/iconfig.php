@@ -1,22 +1,27 @@
 <?php
 /**
- * ownCloud
+ * @author Bart Visscher <bartv@thisnet.nl>
+ * @author Joas Schilling <nickvergessen@owncloud.com>
+ * @author Jörn Friedrich Dreyer <jfd@butonic.de>
+ * @author Lukas Reschke <lukas@owncloud.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Robin Appelman <icewind@owncloud.com>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
  *
- * @author Bart Visscher
- * @copyright 2013 Bart Visscher bartv@thisnet.nl
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE
- * License as published by the Free Software Foundation; either
- * version 3 of the License, or any later version.
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
  *
- * This library is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU AFFERO GENERAL PUBLIC LICENSE for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU Affero General Public
- * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
  *
  */
 
@@ -32,13 +37,24 @@ namespace OCP;
 
 /**
  * Access to all the configuration options ownCloud offers
+ * @since 6.0.0
  */
 interface IConfig {
+	/**
+	 * Sets and deletes system wide values
+	 *
+	 * @param array $configs Associative array with `key => value` pairs
+	 *                       If value is null, the config key will be deleted
+	 * @since 8.0.0
+	 */
+	public function setSystemValues(array $configs);
+
 	/**
 	 * Sets a new system wide value
 	 *
 	 * @param string $key the key of the value, under which will be saved
 	 * @param mixed $value the value that should be stored
+	 * @since 8.0.0
 	 */
 	public function setSystemValue($key, $value);
 
@@ -46,8 +62,9 @@ interface IConfig {
 	 * Looks up a system wide defined value
 	 *
 	 * @param string $key the key of the value, under which it was saved
-	 * @param string $default the default value to be returned if the value isn't set
-	 * @return string the saved value
+	 * @param mixed $default the default value to be returned if the value isn't set
+	 * @return mixed the value or $default
+	 * @since 6.0.0 - parameter $default was added in 7.0.0
 	 */
 	public function getSystemValue($key, $default = '');
 
@@ -55,6 +72,7 @@ interface IConfig {
 	 * Delete a system wide defined value
 	 *
 	 * @param string $key the key of the value, under which it was saved
+	 * @since 8.0.0
 	 */
 	public function deleteSystemValue($key);
 
@@ -63,6 +81,7 @@ interface IConfig {
 	 *
 	 * @param string $appName the appName that we stored the value under
 	 * @return string[] the keys stored for the app
+	 * @since 8.0.0
 	 */
 	public function getAppKeys($appName);
 
@@ -73,6 +92,7 @@ interface IConfig {
 	 * @param string $key the key of the value, under which will be saved
 	 * @param string $value the value that should be stored
 	 * @return void
+	 * @since 6.0.0
 	 */
 	public function setAppValue($appName, $key, $value);
 
@@ -83,8 +103,26 @@ interface IConfig {
 	 * @param string $key the key of the value, under which it was saved
 	 * @param string $default the default value to be returned if the value isn't set
 	 * @return string the saved value
+	 * @since 6.0.0 - parameter $default was added in 7.0.0
 	 */
 	public function getAppValue($appName, $key, $default = '');
+
+	/**
+	 * Delete an app wide defined value
+	 *
+	 * @param string $appName the appName that we stored the value under
+	 * @param string $key the key of the value, under which it was saved
+	 * @since 8.0.0
+	 */
+	public function deleteAppValue($appName, $key);
+
+	/**
+	 * Removes all keys in appconfig belonging to the app
+	 *
+	 * @param string $appName the appName the configs are stored under
+	 * @since 8.0.0
+	 */
+	public function deleteAppValues($appName);
 
 
 	/**
@@ -94,9 +132,11 @@ interface IConfig {
 	 * @param string $appName the appName that we want to store the value under
 	 * @param string $key the key under which the value is being stored
 	 * @param string $value the value that you want to store
-	 * @return void
+	 * @param string $preCondition only update if the config value was previously the value passed as $preCondition
+	 * @throws \OCP\PreConditionNotMetException if a precondition is specified and is not met
+	 * @since 6.0.0 - parameter $precondition was added in 8.0.0
 	 */
-	public function setUserValue($userId, $appName, $key, $value);
+	public function setUserValue($userId, $appName, $key, $value, $preCondition = null);
 
 	/**
 	 * Shortcut for getting a user defined value
@@ -104,8 +144,67 @@ interface IConfig {
 	 * @param string $userId the userId of the user that we want to store the value under
 	 * @param string $appName the appName that we stored the value under
 	 * @param string $key the key under which the value is being stored
-	 * @param string $default the default value to be returned if the value isn't set
+	 * @param mixed $default the default value to be returned if the value isn't set
 	 * @return string
+	 * @since 6.0.0 - parameter $default was added in 7.0.0
 	 */
 	public function getUserValue($userId, $appName, $key, $default = '');
+
+	/**
+	 * Fetches a mapped list of userId -> value, for a specified app and key and a list of user IDs.
+	 *
+	 * @param string $appName app to get the value for
+	 * @param string $key the key to get the value for
+	 * @param array $userIds the user IDs to fetch the values for
+	 * @return array Mapped values: userId => value
+	 * @since 8.0.0
+	 */
+	public function getUserValueForUsers($appName, $key, $userIds);
+
+	/**
+	 * Get the keys of all stored by an app for the user
+	 *
+	 * @param string $userId the userId of the user that we want to store the value under
+	 * @param string $appName the appName that we stored the value under
+	 * @return string[]
+	 * @since 8.0.0
+	 */
+	public function getUserKeys($userId, $appName);
+
+	/**
+	 * Delete a user value
+	 *
+	 * @param string $userId the userId of the user that we want to store the value under
+	 * @param string $appName the appName that we stored the value under
+	 * @param string $key the key under which the value is being stored
+	 * @since 8.0.0
+	 */
+	public function deleteUserValue($userId, $appName, $key);
+
+	/**
+	 * Delete all user values
+	 *
+	 * @param string $userId the userId of the user that we want to remove all values from
+	 * @since 8.0.0
+	 */
+	public function deleteAllUserValues($userId);
+
+	/**
+	 * Delete all user related values of one app
+	 *
+	 * @param string $appName the appName of the app that we want to remove all values from
+	 * @since 8.0.0
+	 */
+	public function deleteAppFromAllUsers($appName);
+
+	/**
+	 * Determines the users that have the given value set for a specific app-key-pair
+	 *
+	 * @param string $appName the app to get the user for
+	 * @param string $key the key to get the user for
+	 * @param string $value the value to get the user for
+	 * @return array of user IDs
+	 * @since 8.0.0
+	 */
+	public function getUsersForUserValue($appName, $key, $value);
 }

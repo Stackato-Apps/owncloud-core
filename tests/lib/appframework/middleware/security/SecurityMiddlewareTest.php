@@ -31,7 +31,7 @@ use OCP\AppFramework\Http\RedirectResponse;
 use OCP\AppFramework\Http\JSONResponse;
 
 
-class SecurityMiddlewareTest extends \PHPUnit_Framework_TestCase {
+class SecurityMiddlewareTest extends \Test\TestCase {
 
 	private $middleware;
 	private $controller;
@@ -43,7 +43,9 @@ class SecurityMiddlewareTest extends \PHPUnit_Framework_TestCase {
 	private $navigationManager;
 	private $urlGenerator;
 
-	public function setUp() {
+	protected function setUp() {
+		parent::setUp();
+
 		$this->controller = $this->getMockBuilder('OCP\AppFramework\Controller')
 			->disableOriginalConstructor()
 				->getMock();
@@ -312,10 +314,15 @@ class SecurityMiddlewareTest extends \PHPUnit_Framework_TestCase {
 
 	public function testAfterExceptionReturnsRedirect(){
 		$this->request = new Request(
-			array('server' =>
-				array('HTTP_ACCEPT' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-					'REQUEST_URI' => 'owncloud/index.php/apps/specialapp')
-			)
+			[
+				'server' =>
+				[
+					'HTTP_ACCEPT' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+					'REQUEST_URI' => 'owncloud/index.php/apps/specialapp'
+				]
+			],
+			$this->getMock('\OCP\Security\ISecureRandom'),
+			$this->getMock('\OCP\IConfig')
 		);
 		$this->middleware = $this->getMiddleware(true, true);
 		$response = $this->middleware->afterException($this->controller, 'test',

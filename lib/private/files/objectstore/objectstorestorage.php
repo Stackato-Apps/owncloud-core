@@ -1,26 +1,29 @@
 <?php
 /**
- * @author Jörn Friedrich Dreyer
- * @copyright (c) 2014 Jörn Friedrich Dreyer <jfd@owncloud.com>
+ * @author Joas Schilling <nickvergessen@owncloud.com>
+ * @author Jörn Friedrich Dreyer <jfd@butonic.de>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Robin Appelman <icewind@owncloud.com>
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE
- * License as published by the Free Software Foundation; either
- * version 3 of the License, or any later version.
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
  *
- * This library is distributed in the hope that it will be useful,
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU AFFERO GENERAL PUBLIC LICENSE for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU Affero General Public
- * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
  *
  */
 
 namespace OC\Files\ObjectStore;
 
-use OC\Files\Filesystem;
 use OCP\Files\ObjectStore\IObjectStore;
 
 class ObjectStoreStorage extends \OC\Files\Storage\Common {
@@ -72,7 +75,7 @@ class ObjectStoreStorage extends \OC\Files\Storage\Common {
 			'size' => 0,
 			'mtime' => $mTime,
 			'storage_mtime' => $mTime,
-			'permissions' => \OCP\PERMISSION_ALL,
+			'permissions' => \OCP\Constants::PERMISSION_ALL,
 		);
 
 		if ($dirName === '' && !$parentExists) {
@@ -216,7 +219,7 @@ class ObjectStoreStorage extends \OC\Files\Storage\Common {
 			\OC\Files\Stream\Dir::register('objectstore' . $path . '/', $files);
 
 			return opendir('fakedir://objectstore' . $path . '/');
-		} catch (Exception $e) {
+		} catch (\Exception $e) {
 			\OCP\Util::writeLog('objectstore', $e->getMessage(), \OCP\Util::ERROR);
 			return false;
 		}
@@ -332,7 +335,7 @@ class ObjectStoreStorage extends \OC\Files\Storage\Common {
 				'size' => 0,
 				'mtime' => $mtime,
 				'storage_mtime' => $mtime,
-				'permissions' => \OCP\PERMISSION_ALL,
+				'permissions' => \OCP\Constants::PERMISSION_ALL,
 			);
 			$fileId = $this->getCache()->put($path, $stat);
 			try {
@@ -357,7 +360,7 @@ class ObjectStoreStorage extends \OC\Files\Storage\Common {
 		if (empty($stat)) {
 			// create new file
 			$stat = array(
-				'permissions' => \OCP\PERMISSION_ALL,
+				'permissions' => \OCP\Constants::PERMISSION_ALL,
 			);
 		}
 		// update stat with new data

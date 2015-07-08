@@ -6,7 +6,7 @@
  * See the COPYING-README file.
  */
 
-class Test_DB extends PHPUnit_Framework_TestCase {
+class Test_DB extends \Test\TestCase {
 	protected $backupGlobals = FALSE;
 
 	protected static $schema_file = 'static://test_db_scheme';
@@ -32,11 +32,18 @@ class Test_DB extends PHPUnit_Framework_TestCase {
 	 */
 	private $table4;
 
-	public function setUp() {
-		$dbfile = OC::$SERVERROOT.'/tests/data/db_structure.xml';
+	/**
+	 * @var string
+	 */
+	private $table5;
 
-		$r = '_'.OC_Util::generateRandomBytes(4).'_';
-		$content = file_get_contents( $dbfile );
+	protected function setUp() {
+		parent::setUp();
+
+		$dbFile = OC::$SERVERROOT.'/tests/data/db_structure.xml';
+
+		$r = $this->getUniqueID('_', 4).'_';
+		$content = file_get_contents( $dbFile );
 		$content = str_replace( '*dbprefix*', '*dbprefix*'.$r, $content );
 		file_put_contents( self::$schema_file, $content );
 		OC_DB::createDbFromStructure(self::$schema_file);
@@ -46,11 +53,14 @@ class Test_DB extends PHPUnit_Framework_TestCase {
 		$this->table2 = $this->test_prefix.'cntcts_cards';
 		$this->table3 = $this->test_prefix.'vcategory';
 		$this->table4 = $this->test_prefix.'decimal';
+		$this->table5 = $this->test_prefix.'uniconst';
 	}
 
-	public function tearDown() {
+	protected function tearDown() {
 		OC_DB::removeDBStructure(self::$schema_file);
 		unlink(self::$schema_file);
+
+		parent::tearDown();
 	}
 
 	public function testQuotes() {
@@ -106,7 +116,7 @@ class Test_DB extends PHPUnit_Framework_TestCase {
 	}
 	
 	public function testinsertIfNotExist() {
-		$categoryentries = array(
+		$categoryEntries = array(
 				array('user' => 'test', 'type' => 'contact', 'category' => 'Family',    'expectedResult' => 1),
 				array('user' => 'test', 'type' => 'contact', 'category' => 'Friends',   'expectedResult' => 1),
 				array('user' => 'test', 'type' => 'contact', 'category' => 'Coworkers', 'expectedResult' => 1),
@@ -114,8 +124,8 @@ class Test_DB extends PHPUnit_Framework_TestCase {
 				array('user' => 'test', 'type' => 'contact', 'category' => 'School',    'expectedResult' => 1),
 			);
 
-		foreach($categoryentries as $entry) {
-			$result = OC_DB::insertIfNotExist('*PREFIX*'.$this->table3,
+		foreach($categoryEntries as $entry) {
+			$result = \OCP\DB::insertIfNotExist('*PREFIX*'.$this->table3,
 				array(
 					'uid' => $entry['user'],
 					'type' => $entry['type'],
@@ -130,14 +140,36 @@ class Test_DB extends PHPUnit_Framework_TestCase {
 		$this->assertEquals(4, count($result->fetchAll()));
 	}
 
-	public function testinsertIfNotExistDontOverwrite() {
-		$fullname = 'fullname test';
+	public function testInsertIfNotExistNull() {
+		$categoryEntries = array(
+			array('addressbookid' => 123, 'fullname' => null, 'expectedResult' => 1),
+			array('addressbookid' => 123, 'fullname' => null, 'expectedResult' => 0),
+			array('addressbookid' => 123, 'fullname' => 'test', 'expectedResult' => 1),
+		);
+
+		foreach($categoryEntries as $entry) {
+			$result = \OCP\DB::insertIfNotExist('*PREFIX*'.$this->table2,
+				array(
+					'addressbookid' => $entry['addressbookid'],
+					'fullname' => $entry['fullname'],
+				));
+			$this->assertEquals($entry['expectedResult'], $result);
+		}
+
+		$query = OC_DB::prepare('SELECT * FROM `*PREFIX*'.$this->table2.'`');
+		$result = $query->execute();
+		$this->assertTrue((bool)$result);
+		$this->assertEquals(2, count($result->fetchAll()));
+	}
+
+	public function testInsertIfNotExistDonTOverwrite() {
+		$fullName = 'fullname test';
 		$uri = 'uri_1';
 		$carddata = 'This is a vCard';
 
 		// Normal test to have same known data inserted.
 		$query = OC_DB::prepare('INSERT INTO `*PREFIX*'.$this->table2.'` (`fullname`, `uri`, `carddata`) VALUES (?, ?, ?)');
-		$result = $query->execute(array($fullname, $uri, $carddata));
+		$result = $query->execute(array($fullName, $uri, $carddata));
 		$this->assertEquals(1, $result);
 		$query = OC_DB::prepare('SELECT `fullname`, `uri`, `carddata` FROM `*PREFIX*'.$this->table2.'` WHERE `uri` = ?');
 		$result = $query->execute(array($uri));
@@ -148,9 +180,9 @@ class Test_DB extends PHPUnit_Framework_TestCase {
 		$this->assertEquals($carddata, $rowset[0]['carddata']);
 
 		// Try to insert a new row
-		$result = OC_DB::insertIfNotExist('*PREFIX*'.$this->table2,
+		$result = \OCP\DB::insertIfNotExist('*PREFIX*'.$this->table2,
 			array(
-				'fullname' => $fullname,
+				'fullname' => $fullName,
 				'uri' => $uri,
 			));
 		$this->assertEquals(0, $result);
@@ -166,6 +198,57 @@ class Test_DB extends PHPUnit_Framework_TestCase {
 		$this->assertEquals($carddata, $rowset[0]['carddata']);
 	}
 
+	public function testInsertIfNotExistsViolating() {
+		$result = \OCP\DB::insertIfNotExist('*PREFIX*'.$this->table5,
+			array(
+				'storage' => 1,
+				'path_hash' => md5('welcome.txt'),
+				'etag' => $this->getUniqueID()
+			));
+		$this->assertEquals(1, $result);
+
+		$result = \OCP\DB::insertIfNotExist('*PREFIX*'.$this->table5,
+			array(
+				'storage' => 1,
+				'path_hash' => md5('welcome.txt'),
+				'etag' => $this->getUniqueID()
+			),['storage', 'path_hash']);
+
+		$this->assertEquals(0, $result);
+	}
+
+	public function insertIfNotExistsViolatingThrows() {
+		return [
+			[null],
+			[['etag']],
+		];
+	}
+
+	/**
+	 * @dataProvider insertIfNotExistsViolatingThrows
+	 * @expectedException \Doctrine\DBAL\Exception\UniqueConstraintViolationException
+	 *
+	 * @param array $compareKeys
+	 */
+	public function testInsertIfNotExistsViolatingThrows($compareKeys) {
+		$result = \OCP\DB::insertIfNotExist('*PREFIX*'.$this->table5,
+			array(
+				'storage' => 1,
+				'path_hash' => md5('welcome.txt'),
+				'etag' => $this->getUniqueID()
+			));
+		$this->assertEquals(1, $result);
+
+		$result = \OCP\DB::insertIfNotExist('*PREFIX*'.$this->table5,
+			array(
+				'storage' => 1,
+				'path_hash' => md5('welcome.txt'),
+				'etag' => $this->getUniqueID()
+			), $compareKeys);
+
+		$this->assertEquals(0, $result);
+	}
+
 	public function testUtf8Data() {
 		$table = "*PREFIX*{$this->table2}";
 		$expected = "Ћö雙喜\xE2\x80\xA2";
@@ -178,31 +261,33 @@ class Test_DB extends PHPUnit_Framework_TestCase {
 		$this->assertSame($expected, $actual);
 	}
 
-	public function testDecimal() {
+	/**
+	 * Insert, select and delete decimal(12,2) values
+	 * @dataProvider decimalData
+	 */
+	public function testDecimal($insert, $expect) {
 		$table = "*PREFIX*" . $this->table4;
 		$rowname = 'decimaltest';
 
-		// Insert, select and delete decimal(12,2) values
-		$inserts = array('1337133713.37', '1234567890');
-		$expects = array('1337133713.37', '1234567890.00');
+		$query = OC_DB::prepare('INSERT INTO `' . $table . '` (`' . $rowname . '`) VALUES (?)');
+		$result = $query->execute(array($insert));
+		$this->assertEquals(1, $result);
+		$query = OC_DB::prepare('SELECT `' . $rowname . '` FROM `' . $table . '`');
+		$result = $query->execute();
+		$this->assertTrue((bool)$result);
+		$row = $result->fetchRow();
+		$this->assertArrayHasKey($rowname, $row);
+		$this->assertEquals($expect, $row[$rowname]);
+		$query = OC_DB::prepare('DELETE FROM `' . $table . '`');
+		$result = $query->execute();
+		$this->assertTrue((bool)$result);
+	}
 
-		for ($i = 0; $i < count($inserts); $i++) {
-			$insert = $inserts[$i];
-			$expect = $expects[$i];
-
-			$query = OC_DB::prepare('INSERT INTO `' . $table . '` (`' . $rowname . '`) VALUES (?)');
-			$result = $query->execute(array($insert));
-			$this->assertEquals(1, $result);
-			$query = OC_DB::prepare('SELECT `' . $rowname . '` FROM `' . $table . '`');
-			$result = $query->execute();
-			$this->assertTrue((bool)$result);
-			$row = $result->fetchRow();
-			$this->assertArrayHasKey($rowname, $row);
-			$this->assertEquals($expect, $row[$rowname]);
-			$query = OC_DB::prepare('DELETE FROM `' . $table . '`');
-			$result = $query->execute();
-			$this->assertTrue((bool)$result);
-		}
+	public function decimalData() {
+		return [
+			['1337133713.37', '1337133713.37'],
+			['1234567890', '1234567890.00'],
+		];
 	}
 
 	public function testUpdateAffectedRowsNoMatch() {
@@ -239,7 +324,7 @@ class Test_DB extends PHPUnit_Framework_TestCase {
 
 	protected function insertCardData($fullname, $uri) {
 		$query = OC_DB::prepare("INSERT INTO `*PREFIX*{$this->table2}` (`fullname`, `uri`, `carddata`) VALUES (?, ?, ?)");
-		$this->assertSame(1, $query->execute(array($fullname, $uri, uniqid())));
+		$this->assertSame(1, $query->execute(array($fullname, $uri, $this->getUniqueID())));
 	}
 
 	protected function updateCardData($fullname, $uri) {
@@ -295,32 +380,5 @@ class Test_DB extends PHPUnit_Framework_TestCase {
 		$query = OC_DB::prepare("SELECT * FROM `$table` WHERE `fullname` ILIKE ?");
 		$result = $query->execute(array('%ba%'));
 		$this->assertCount(1, $result->fetchAll());
-	}
-
-	public function testDecimal() {
-		$table = "*PREFIX*" . $this->table4;
-		$rowname = 'decimaltest';
-
-		// Insert, select and delete decimal(12,2) values
-		$inserts = array('1337133713.37', '1234567890');
-		$expects = array('1337133713.37', '1234567890.00');
-
-		for ($i = 0; $i < count($inserts); $i++) {
-			$insert = $inserts[$i];
-			$expect = $expects[$i];
-
-			$query = OC_DB::prepare('INSERT INTO `' . $table . '` (`' . $rowname . '`) VALUES (?)');
-			$result = $query->execute(array($insert));
-			$this->assertEquals(1, $result);
-			$query = OC_DB::prepare('SELECT `' . $rowname . '` FROM `' . $table . '`');
-			$result = $query->execute();
-			$this->assertTrue((bool)$result);
-			$row = $result->fetchRow();
-			$this->assertArrayHasKey($rowname, $row);
-			$this->assertEquals($expect, $row[$rowname]);
-			$query = OC_DB::prepare('DELETE FROM `' . $table . '`');
-			$result = $query->execute();
-			$this->assertTrue((bool)$result);
-		}
 	}
 }

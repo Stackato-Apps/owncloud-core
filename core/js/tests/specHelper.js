@@ -77,6 +77,8 @@ window.Snap.prototype = {
 	close: function() {}
 };
 
+window.isPhantom = /phantom/i.test(navigator.userAgent);
+
 // global setup for all tests
 (function setupTests() {
 	var fakeServer = null,
@@ -111,15 +113,6 @@ window.Snap.prototype = {
 		// must use fake responses for expected calls
 		fakeServer = sinon.fakeServer.create();
 
-		// return fake translations as they might be requested for many test runs
-		fakeServer.respondWith(/\/index.php\/core\/ajax\/translations.php$/, [
-				200, {
-					"Content-Type": "application/json"
-				},
-				'{"data": [], "plural_form": "nplurals=2; plural=(n != 1);"}'
-			]
-		);
-
 		// make it globally available, so that other tests can define
 		// custom responses
 		window.fakeServer = fakeServer;
@@ -127,6 +120,12 @@ window.Snap.prototype = {
 		if (!OC.TestUtil) {
 			OC.TestUtil = TestUtil;
 		}
+
+		// reset plugins
+		OC.Plugins._plugins = [];
+
+		// dummy select2 (which isn't loaded during the tests)
+		$.fn.select2 = function() {};
 	});
 
 	afterEach(function() {
@@ -135,6 +134,8 @@ window.Snap.prototype = {
 		fakeServer.restore();
 
 		$testArea.remove();
+
+		delete($.fn.select2);
 	});
 })();
 

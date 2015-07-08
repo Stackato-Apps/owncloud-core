@@ -1,30 +1,32 @@
 <?php
 /**
-* ownCloud
-*
-* @author Arthur Schiwon
-* @copyright 2014 Arthur Schiwon blizzz@owncloud.com
-*
-* This library is free software; you can redistribute it and/or
-* modify it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE
-* License as published by the Free Software Foundation; either
-* version 3 of the License, or any later version.
-*
-* This library is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU AFFERO GENERAL PUBLIC LICENSE for more details.
-*
-* You should have received a copy of the GNU Affero General Public
-* License along with this library.  If not, see <http://www.gnu.org/licenses/>.
-*
-*/
+ * @author Arthur Schiwon <blizzz@owncloud.com>
+ * @author Joas Schilling <nickvergessen@owncloud.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Philippe Jung <phil.jung@free.fr>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
+ */
 
 namespace OCA\user_ldap\tests;
 
 use OCA\user_ldap\lib\user\Manager;
 
-class Test_User_Manager extends \PHPUnit_Framework_TestCase {
+class Test_User_Manager extends \Test\TestCase {
 
     private function getTestInstances() {
         $access  = $this->getMock('\OCA\user_ldap\lib\user\IUserTools');
@@ -33,12 +35,13 @@ class Test_User_Manager extends \PHPUnit_Framework_TestCase {
         $log     = $this->getMock('\OCA\user_ldap\lib\LogWrapper');
         $avaMgr  = $this->getMock('\OCP\IAvatarManager');
         $image   = $this->getMock('\OCP\Image');
+        $dbc     = $this->getMock('\OCP\IDBConnection');
 
-        return array($access, $config, $filesys, $image, $log, $avaMgr);
+        return array($access, $config, $filesys, $image, $log, $avaMgr, $dbc);
     }
 
     public function testGetByDNExisting() {
-        list($access, $config, $filesys, $image, $log, $avaMgr) =
+        list($access, $config, $filesys, $image, $log, $avaMgr, $dbc) =
             $this->getTestInstances();
 
         $inputDN = 'cn=foo,dc=foobar,dc=bar';
@@ -57,7 +60,7 @@ class Test_User_Manager extends \PHPUnit_Framework_TestCase {
         $access->expects($this->never())
             ->method('username2dn');
 
-        $manager = new Manager($config, $filesys, $log, $avaMgr, $image);
+        $manager = new Manager($config, $filesys, $log, $avaMgr, $image, $dbc);
         $manager->setLdapAccess($access);
         $user = $manager->get($inputDN);
 
@@ -65,7 +68,7 @@ class Test_User_Manager extends \PHPUnit_Framework_TestCase {
     }
 
     public function testGetByEDirectoryDN() {
-        list($access, $config, $filesys, $image, $log, $avaMgr) =
+        list($access, $config, $filesys, $image, $log, $avaMgr, $dbc) =
             $this->getTestInstances();
 
         $inputDN = 'uid=foo,o=foobar,c=bar';
@@ -84,7 +87,7 @@ class Test_User_Manager extends \PHPUnit_Framework_TestCase {
         $access->expects($this->never())
             ->method('username2dn');
 
-        $manager = new Manager($config, $filesys, $log, $avaMgr, $image);
+        $manager = new Manager($config, $filesys, $log, $avaMgr, $image, $dbc);
         $manager->setLdapAccess($access);
         $user = $manager->get($inputDN);
 
@@ -92,7 +95,7 @@ class Test_User_Manager extends \PHPUnit_Framework_TestCase {
     }
 
     public function testGetByExoticDN() {
-        list($access, $config, $filesys, $image, $log, $avaMgr) =
+        list($access, $config, $filesys, $image, $log, $avaMgr, $dbc) =
             $this->getTestInstances();
 
         $inputDN = 'ab=cde,f=ghei,mno=pq';
@@ -111,7 +114,7 @@ class Test_User_Manager extends \PHPUnit_Framework_TestCase {
         $access->expects($this->never())
             ->method('username2dn');
 
-        $manager = new Manager($config, $filesys, $log, $avaMgr, $image);
+        $manager = new Manager($config, $filesys, $log, $avaMgr, $image, $dbc);
         $manager->setLdapAccess($access);
         $user = $manager->get($inputDN);
 
@@ -119,7 +122,7 @@ class Test_User_Manager extends \PHPUnit_Framework_TestCase {
     }
 
     public function testGetByDNNotExisting() {
-        list($access, $config, $filesys, $image, $log, $avaMgr) =
+        list($access, $config, $filesys, $image, $log, $avaMgr, $dbc) =
             $this->getTestInstances();
 
         $inputDN = 'cn=gone,dc=foobar,dc=bar';
@@ -139,13 +142,15 @@ class Test_User_Manager extends \PHPUnit_Framework_TestCase {
             ->with($this->equalTo($inputDN))
             ->will($this->returnValue(false));
 
-        $manager = new Manager($config, $filesys, $log, $avaMgr, $image);
+        $manager = new Manager($config, $filesys, $log, $avaMgr, $image, $dbc);
         $manager->setLdapAccess($access);
         $user = $manager->get($inputDN);
+
+        $this->assertNull($user);
     }
 
     public function testGetByUidExisting() {
-        list($access, $config, $filesys, $image, $log, $avaMgr) =
+        list($access, $config, $filesys, $image, $log, $avaMgr, $dbc) =
             $this->getTestInstances();
 
         $dn = 'cn=foo,dc=foobar,dc=bar';
@@ -164,7 +169,7 @@ class Test_User_Manager extends \PHPUnit_Framework_TestCase {
             ->with($this->equalTo($uid))
             ->will($this->returnValue(false));
 
-        $manager = new Manager($config, $filesys, $log, $avaMgr, $image);
+        $manager = new Manager($config, $filesys, $log, $avaMgr, $image, $dbc);
         $manager->setLdapAccess($access);
         $user = $manager->get($uid);
 
@@ -172,7 +177,7 @@ class Test_User_Manager extends \PHPUnit_Framework_TestCase {
     }
 
     public function testGetByUidNotExisting() {
-        list($access, $config, $filesys, $image, $log, $avaMgr) =
+        list($access, $config, $filesys, $image, $log, $avaMgr, $dbc) =
             $this->getTestInstances();
 
         $dn = 'cn=foo,dc=foobar,dc=bar';
@@ -186,9 +191,11 @@ class Test_User_Manager extends \PHPUnit_Framework_TestCase {
             ->with($this->equalTo($uid))
             ->will($this->returnValue(false));
 
-        $manager = new Manager($config, $filesys, $log, $avaMgr, $image);
+        $manager = new Manager($config, $filesys, $log, $avaMgr, $image, $dbc);
         $manager->setLdapAccess($access);
         $user = $manager->get($uid);
+
+        $this->assertNull($user);
     }
 
 }

@@ -1,23 +1,29 @@
 <?php
-
 /**
- * ownCloud – LDAP group backend
+ * @author Alexander Bergolth <leo@strike.wu.ac.at>
+ * @author Andreas Fischer <bantu@owncloud.com>
+ * @author Arthur Schiwon <blizzz@owncloud.com>
+ * @author Bart Visscher <bartv@thisnet.nl>
+ * @author Christopher Schäpers <kondou@ts.unde.re>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Robin McCorkell <rmccorkell@karoshi.org.uk>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
+ * @author Vincent Petry <pvince81@owncloud.com>
  *
- * @author Arthur Schiwon
- * @copyright 2012 Arthur Schiwon blizzz@owncloud.com
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE
- * License as published by the Free Software Foundation; either
- * version 3 of the License, or any later version.
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
  *
- * This library is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU AFFERO GENERAL PUBLIC LICENSE for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU Affero General Public
- * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
  *
  */
 
@@ -245,7 +251,14 @@ class GROUP_LDAP extends BackendUtility implements \OCP\GroupInterface {
 	 * @return string|bool
 	 */
 	public function getUserPrimaryGroupIDs($dn) {
-		return $this->getEntryGroupID($dn, 'primaryGroupID');
+		$primaryGroupID = false;
+		if($this->access->connection->hasPrimaryGroups) {
+			$primaryGroupID = $this->getEntryGroupID($dn, 'primaryGroupID');
+			if($primaryGroupID === false) {
+				$this->access->connection->hasPrimaryGroups = false;
+			}
+		}
+		return $primaryGroupID;
 	}
 
 	/**
@@ -262,13 +275,9 @@ class GROUP_LDAP extends BackendUtility implements \OCP\GroupInterface {
 			throw new \Exception('Not a valid group');
 		}
 
-		$filterParts = array();
-		// part for counting users (see countUsers in user backend)
-		// it is consolidated in OC 8. No big changes for OC 7.
-		$filterParts[] = \OCP\Util::mb_str_replace(
-			'%uid', '*', $this->access->connection->ldapLoginFilter, 'UTF-8');
+		$filterParts = [];
+		$filterParts[] = $this->access->getFilterForUserCount();
 		if(!empty($search)) {
-			$search = $this->access->escapeFilterPart($search, true);
 			$filterParts[] = $this->access->getFilterPartForUserSearch($search);
 		}
 		$filterParts[] = 'primaryGroupID=' . $groupID;
@@ -360,6 +369,27 @@ class GROUP_LDAP extends BackendUtility implements \OCP\GroupInterface {
 			return array();
 		}
 
+		$groups = [];
+		$primaryGroup = $this->getUserPrimaryGroup($userDN);
+
+		// if possible, read out membership via memberOf. It's far faster than
+		// performing a search, which still is a fallback later.
+		if(intval($this->access->connection->hasMemberOfFilterSupport) === 1
+			&& intval($this->access->connection->useMemberOfToDetectMembership) === 1
+		) {
+			$groupDNs = $this->access->readAttribute($userDN, 'memberOf');
+			if (is_array($groupDNs)) {
+				foreach ($groupDNs as $dn) {
+					$groups[] = $this->access->dn2groupname($dn);;
+				}
+			}
+			if($primaryGroup !== false) {
+				$groups[] = $primaryGroup;
+			}
+			$this->access->connection->writeToCache($cacheKey, $groups);
+			return $groups;
+		}
+
 		//uniqueMember takes DN, memberuid the uid, so we need to distinguish
 		if((strtolower($this->access->connection->ldapGroupMemberAssocAttr) === 'uniquemember')
 			|| (strtolower($this->access->connection->ldapGroupMemberAssocAttr) === 'member')
@@ -385,7 +415,6 @@ class GROUP_LDAP extends BackendUtility implements \OCP\GroupInterface {
 			$this->cachedGroupsByMember[$uid] = $groups;
 		}
 
-		$primaryGroup = $this->getUserPrimaryGroup($userDN);
 		if($primaryGroup !== false) {
 			$groups[] = $primaryGroup;
 		}
@@ -743,6 +772,6 @@ class GROUP_LDAP extends BackendUtility implements \OCP\GroupInterface {
 	* compared with OC_USER_BACKEND_CREATE_USER etc.
 	*/
 	public function implementsActions($actions) {
-		return (bool)(OC_GROUP_BACKEND_COUNT_USERS & $actions);
+		return (bool)(\OC_Group_Backend::COUNT_USERS & $actions);
 	}
 }

@@ -6,7 +6,7 @@
  * See the COPYING-README file.
  */
 
-class Test_Helper extends PHPUnit_Framework_TestCase {
+class Test_Helper extends \Test\TestCase {
 
 	/**
 	 * @dataProvider humanFileSizeProvider
@@ -53,21 +53,22 @@ class Test_Helper extends PHPUnit_Framework_TestCase {
 	}
 
 	/**
-	 * @dataProvider computerFileSizeProvider
+	 * @dataProvider providesComputerFileSize
 	 */
 	function testComputerFileSize($expected, $input) {
 		$result = OC_Helper::computerFileSize($input);
 		$this->assertEquals($expected, $result);
 	}
 
-	function computerFileSizeProvider(){
-		return array(
-			array(0.0, "0 B"),
-			array(1024.0, "1 kB"),
-			array(1395864371.0, '1.3 GB'),
-			array(9961472.0, "9.5 MB"),
-			array(500041567437.0, "465.7 GB"),
-		);
+	function providesComputerFileSize(){
+		return [
+			[0.0, "0 B"],
+			[1024.0, "1 kB"],
+			[1395864371.0, '1.3 GB'],
+			[9961472.0, "9.5 MB"],
+			[500041567437.0, "465.7 GB"],
+			[false, "12 GB etfrhzui"]
+		];
 	}
 
 	function testGetMimeType() {
@@ -84,11 +85,11 @@ class Test_Helper extends PHPUnit_Framework_TestCase {
 		$expected = 'application/zip';
 		$this->assertEquals($result, $expected);
 
-		$result = OC_Helper::getMimeType($dir."/logo-wide.svg");
+		$result = OC_Helper::getMimeType($dir."/desktopapp.svg");
 		$expected = 'image/svg+xml';
 		$this->assertEquals($result, $expected);
 
-		$result = OC_Helper::getMimeType($dir."/logo-wide.png");
+		$result = OC_Helper::getMimeType($dir."/desktopapp.png");
 		$expected = 'image/png';
 		$this->assertEquals($result, $expected);
 	}
@@ -447,15 +448,33 @@ class Test_Helper extends PHPUnit_Framework_TestCase {
 	public function testLinkToPublic() {
 		\OC::$WEBROOT = '';
 		$result = \OC_Helper::linkToPublic('files');
-		$this->assertEquals('http://localhost/public.php?service=files', $result);
+		$this->assertEquals('http://localhost/s', $result);
 		$result = \OC_Helper::linkToPublic('files', false);
-		$this->assertEquals('http://localhost/public.php?service=files', $result);
+		$this->assertEquals('http://localhost/s', $result);
+		$result = \OC_Helper::linkToPublic('files', true);
+		$this->assertEquals('http://localhost/s/', $result);
+
+		$result = \OC_Helper::linkToPublic('other');
+		$this->assertEquals('http://localhost/public.php?service=other', $result);
+		$result = \OC_Helper::linkToPublic('other', false);
+		$this->assertEquals('http://localhost/public.php?service=other', $result);
+		$result = \OC_Helper::linkToPublic('other', true);
+		$this->assertEquals('http://localhost/public.php?service=other/', $result);
 
 		\OC::$WEBROOT = '/owncloud';
 		$result = \OC_Helper::linkToPublic('files');
-		$this->assertEquals('http://localhost/owncloud/public.php?service=files', $result);
+		$this->assertEquals('http://localhost/owncloud/s', $result);
 		$result = \OC_Helper::linkToPublic('files', false);
-		$this->assertEquals('http://localhost/owncloud/public.php?service=files', $result);
+		$this->assertEquals('http://localhost/owncloud/s', $result);
+		$result = \OC_Helper::linkToPublic('files', true);
+		$this->assertEquals('http://localhost/owncloud/s/', $result);
+
+		$result = \OC_Helper::linkToPublic('other');
+		$this->assertEquals('http://localhost/owncloud/public.php?service=other', $result);
+		$result = \OC_Helper::linkToPublic('other', false);
+		$this->assertEquals('http://localhost/owncloud/public.php?service=other', $result);
+		$result = \OC_Helper::linkToPublic('other', true);
+		$this->assertEquals('http://localhost/owncloud/public.php?service=other/', $result);
 	}
 
 	/**
@@ -490,24 +509,9 @@ class Test_Helper extends PHPUnit_Framework_TestCase {
 	 * @param $methodName
 	 * @param array $parameters
 	 * @return mixed
+	 * @deprecated Please extend \Test\TestCase and use self::invokePrivate() then
 	 */
 	public static function invokePrivate($object, $methodName, array $parameters = array()) {
-		$reflection = new ReflectionClass(get_class($object));
-
-		if ($reflection->hasMethod($methodName)) {
-			$method = $reflection->getMethod($methodName);
-
-			$method->setAccessible(true);
-
-			return $method->invokeArgs($object, $parameters);
-		} elseif ($reflection->hasProperty($methodName)) {
-			$property = $reflection->getProperty($methodName);
-
-			$property->setAccessible(true);
-
-			return $property->getValue($object);
-		}
-
-		return false;
+		return parent::invokePrivate($object, $methodName, $parameters);
 	}
 }

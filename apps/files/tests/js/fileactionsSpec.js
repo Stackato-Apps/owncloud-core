@@ -157,6 +157,48 @@ describe('OCA.Files.FileActions tests', function() {
 		expect(deleteStub.getCall(0).args[1]).toEqual('/somepath/dir');
 		deleteStub.restore();
 	});
+	it('shows delete hint when no permission to delete', function() {
+		var deleteStub = sinon.stub(fileList, 'do_delete');
+		var fileData = {
+			id: 18,
+			type: 'file',
+			name: 'testName.txt',
+			path: '/somepath/dir',
+			mimetype: 'text/plain',
+			size: '1234',
+			etag: 'a01234c',
+			mtime: '123456',
+			permissions: OC.PERMISSION_READ
+		};
+		var $tr = fileList.add(fileData);
+		FileActions.display($tr.find('td.filename'), true, fileList);
+
+		var $action = $tr.find('.action.delete');
+
+		expect($action.hasClass('no-permission')).toEqual(true);
+		deleteStub.restore();
+	});
+	it('shows delete hint not when permission to delete', function() {
+		var deleteStub = sinon.stub(fileList, 'do_delete');
+		var fileData = {
+			id: 18,
+			type: 'file',
+			name: 'testName.txt',
+			path: '/somepath/dir',
+			mimetype: 'text/plain',
+			size: '1234',
+			etag: 'a01234c',
+			mtime: '123456',
+			permissions: OC.PERMISSION_DELETE
+		};
+		var $tr = fileList.add(fileData);
+		FileActions.display($tr.find('td.filename'), true, fileList);
+
+		var $action = $tr.find('.action.delete');
+
+		expect($action.hasClass('no-permission')).toEqual(false);
+		deleteStub.restore();
+	});
 	it('passes context to action handler', function() {
 		var actionStub = sinon.stub();
 		var fileData = {
@@ -192,6 +234,54 @@ describe('OCA.Files.FileActions tests', function() {
 		$tr.find('.action-test').click();
 		context = actionStub.getCall(0).args[1];
 		expect(context.dir).toEqual('/somepath');
+	});
+	describe('custom rendering', function() {
+		var $tr;
+		beforeEach(function() {
+			var fileData = {
+				id: 18,
+				type: 'file',
+				name: 'testName.txt',
+				mimetype: 'text/plain',
+				size: '1234',
+				etag: 'a01234c',
+				mtime: '123456'
+			};
+			$tr = fileList.add(fileData);
+		});
+		it('regular function', function() {
+			var actionStub = sinon.stub();
+			FileActions.registerAction({
+				name: 'Test',
+				displayName: '',
+				mime: 'all',
+				permissions: OC.PERMISSION_READ,
+				render: function(actionSpec, isDefault, context) {
+					expect(actionSpec.name).toEqual('Test');
+					expect(actionSpec.displayName).toEqual('');
+					expect(actionSpec.permissions).toEqual(OC.PERMISSION_READ);
+					expect(actionSpec.mime).toEqual('all');
+					expect(isDefault).toEqual(false);
+
+					expect(context.fileList).toEqual(fileList);
+					expect(context.$file[0]).toEqual($tr[0]);
+
+					var $customEl = $('<a href="#"><span>blabli</span><span>blabla</span></a>');
+					$tr.find('td:first').append($customEl);
+					return $customEl;
+				},
+				actionHandler: actionStub
+			});
+			FileActions.display($tr.find('td.filename'), true, fileList);
+
+			var $actionEl = $tr.find('td:first .action-test');
+			expect($actionEl.length).toEqual(1);
+			expect($actionEl.hasClass('action')).toEqual(true);
+
+			$actionEl.click();
+			expect(actionStub.calledOnce).toEqual(true);
+			expect(actionStub.getCall(0).args[0]).toEqual('testName.txt');
+		});
 	});
 	describe('merging', function() {
 		var $tr;

@@ -1,5 +1,32 @@
 <?php
 /**
+ * @author Björn Schießle <schiessle@owncloud.com>
+ * @author Joas Schilling <nickvergessen@owncloud.com>
+ * @author Jörn Friedrich Dreyer <jfd@butonic.de>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Robin Appelman <icewind@owncloud.com>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
+ * @author Vincent Petry <pvince81@owncloud.com>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
+ */
+use OCA\Files_sharing\Tests\TestCase;
+
+/**
  * ownCloud
  *
  * @author Vincent Petry, Bjoern Schiessle
@@ -20,9 +47,7 @@
  * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
-require_once __DIR__ . '/base.php';
-
-class Test_Files_Sharing_Cache extends Test_Files_Sharing_Base {
+class Test_Files_Sharing_Cache extends TestCase {
 
 	/**
 	 * @var OC\Files\View
@@ -41,7 +66,7 @@ class Test_Files_Sharing_Cache extends Test_Files_Sharing_Base {
 	/** @var \OC\Files\Storage\Storage */
 	protected $sharedStorage;
 
-	function setUp() {
+	protected function setUp() {
 		parent::setUp();
 
 		\OC_User::setDisplayName(self::TEST_FILES_SHARING_API_USER1, 'User One');
@@ -87,8 +112,10 @@ class Test_Files_Sharing_Cache extends Test_Files_Sharing_Base {
 		$this->sharedCache = $this->sharedStorage->getCache();
 	}
 
-	function tearDown() {
-		$this->sharedCache->clear();
+	protected function tearDown() {
+		if($this->sharedCache) {
+			$this->sharedCache->clear();
+		}
 
 		self::loginHelper(self::TEST_FILES_SHARING_API_USER1);
 
@@ -201,6 +228,96 @@ class Test_Files_Sharing_Cache extends Test_Files_Sharing_Base {
 				),
 			);
 		$this->verifyFiles($check, $results);
+	}
+
+	/**
+	 * Test searching by tag
+	 */
+	function testSearchByTag() {
+		$userId = \OC::$server->getUserSession()->getUser()->getUId();
+		$id1 = $this->sharedCache->get('bar.txt')['fileid'];
+		$id2 = $this->sharedCache->get('subdir/another too.txt')['fileid'];
+		$id3 = $this->sharedCache->get('subdir/not a text file.xml')['fileid'];
+		$id4 = $this->sharedCache->get('subdir/another.txt')['fileid'];
+		$tagManager = \OC::$server->getTagManager()->load('files', null, null, $userId);
+		$tagManager->tagAs($id1, 'tag1');
+		$tagManager->tagAs($id1, 'tag2');
+		$tagManager->tagAs($id2, 'tag1');
+		$tagManager->tagAs($id3, 'tag1');
+		$tagManager->tagAs($id4, 'tag2');
+		$results = $this->sharedStorage->getCache()->searchByTag('tag1', $userId);
+		$check = array(
+				array(
+					'name' => 'bar.txt',
+					'path' => 'bar.txt'
+				),
+				array(
+					'name' => 'another too.txt',
+					'path' => 'subdir/another too.txt'
+				),
+				array(
+					'name' => 'not a text file.xml',
+					'path' => 'subdir/not a text file.xml'
+				),
+			);
+		$this->verifyFiles($check, $results);
+		$tagManager->delete(array('tag1', 'tag2'));
+	}
+
+	/**
+	 * Test searching by tag for multiple sections of the tree
+	 */
+	function testSearchByTagTree() {
+		$userId = \OC::$server->getUserSession()->getUser()->getUId();
+		$this->sharedStorage->mkdir('subdir/emptydir');
+		$this->sharedStorage->mkdir('subdir/emptydir2');
+		$this->ownerStorage->getScanner()->scan('');
+		$allIds = array(
+			$this->sharedCache->get('')['fileid'],
+			$this->sharedCache->get('bar.txt')['fileid'],
+			$this->sharedCache->get('subdir/another too.txt')['fileid'],
+			$this->sharedCache->get('subdir/not a text file.xml')['fileid'],
+			$this->sharedCache->get('subdir/another.txt')['fileid'],
+			$this->sharedCache->get('subdir/emptydir')['fileid'],
+			$this->sharedCache->get('subdir/emptydir2')['fileid'],
+		);
+		$tagManager = \OC::$server->getTagManager()->load('files', null, null, $userId);
+		foreach ($allIds as $id) {
+			$tagManager->tagAs($id, 'tag1');
+		}
+		$results = $this->sharedStorage->getCache()->searchByTag('tag1', $userId);
+		$check = array(
+				array(
+					'name' => 'shareddir',
+					'path' => ''
+				),
+				array(
+					'name' => 'bar.txt',
+					'path' => 'bar.txt'
+				),
+				array(
+					'name' => 'another.txt',
+					'path' => 'subdir/another.txt'
+				),
+				array(
+					'name' => 'another too.txt',
+					'path' => 'subdir/another too.txt'
+				),
+				array(
+					'name' => 'emptydir',
+					'path' => 'subdir/emptydir'
+				),
+				array(
+					'name' => 'emptydir2',
+					'path' => 'subdir/emptydir2'
+				),
+				array(
+					'name' => 'not a text file.xml',
+					'path' => 'subdir/not a text file.xml'
+				),
+			);
+		$this->verifyFiles($check, $results);
+		$tagManager->delete(array('tag1'));
 	}
 
 	function testGetFolderContentsInRoot() {
@@ -347,7 +464,7 @@ class Test_Files_Sharing_Cache extends Test_Files_Sharing_Base {
 		self::loginHelper(self::TEST_FILES_SHARING_API_USER1);
 		\OC\Files\Filesystem::file_put_contents('test.txt', 'foo');
 		$info = \OC\Files\Filesystem::getFileInfo('test.txt');
-		\OCP\Share::shareItem('file', $info->getId(), \OCP\Share::SHARE_TYPE_USER, self::TEST_FILES_SHARING_API_USER2, \OCP\PERMISSION_ALL);
+		\OCP\Share::shareItem('file', $info->getId(), \OCP\Share::SHARE_TYPE_USER, self::TEST_FILES_SHARING_API_USER2, \OCP\Constants::PERMISSION_ALL);
 		\OC_Util::tearDownFS();
 
 		self::loginHelper(self::TEST_FILES_SHARING_API_USER2);
@@ -368,7 +485,7 @@ class Test_Files_Sharing_Cache extends Test_Files_Sharing_Base {
 		\OC\Files\Filesystem::touch('foo/bar/test.txt');
 		$folderInfo = \OC\Files\Filesystem::getFileInfo('foo');
 		$fileInfo = \OC\Files\Filesystem::getFileInfo('foo/bar/test.txt');
-		\OCP\Share::shareItem('folder', $folderInfo->getId(), \OCP\Share::SHARE_TYPE_USER, self::TEST_FILES_SHARING_API_USER2, \OCP\PERMISSION_ALL);
+		\OCP\Share::shareItem('folder', $folderInfo->getId(), \OCP\Share::SHARE_TYPE_USER, self::TEST_FILES_SHARING_API_USER2, \OCP\Constants::PERMISSION_ALL);
 		\OC_Util::tearDownFS();
 
 		self::loginHelper(self::TEST_FILES_SHARING_API_USER2);

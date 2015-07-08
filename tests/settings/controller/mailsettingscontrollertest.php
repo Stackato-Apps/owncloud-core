@@ -14,11 +14,13 @@ use \OC\Settings\Application;
 /**
  * @package OC\Settings\Controller
  */
-class MailSettingscontrollerTest extends \PHPUnit_Framework_TestCase {
+class MailSettingsControllerTest extends \Test\TestCase {
 
 	private $container;
 
 	protected function setUp() {
+		parent::setUp();
+
 		$app = new Application();
 		$this->container = $app->getContainer();
 		$this->container['Config'] = $this->getMockBuilder('\OCP\IConfig')
@@ -28,7 +30,10 @@ class MailSettingscontrollerTest extends \PHPUnit_Framework_TestCase {
 		$this->container['AppName'] = 'settings';
 		$this->container['UserSession'] = $this->getMockBuilder('\OC\User\Session')
 			->disableOriginalConstructor()->getMock();
-		$this->container['Mail'] = $this->getMockBuilder('\OC_Mail')
+		$this->container['MailMessage'] = $this->getMockBuilder('\OCP\Mail\IMessage')
+			->disableOriginalConstructor()->getMock();
+		$this->container['Mailer'] = $this->getMockBuilder('\OC\Mail\Mailer')
+			->setMethods(['send'])
 			->disableOriginalConstructor()->getMock();
 		$this->container['Defaults'] = $this->getMockBuilder('\OC_Defaults')
 			->disableOriginalConstructor()->getMock();
@@ -67,26 +72,37 @@ class MailSettingscontrollerTest extends \PHPUnit_Framework_TestCase {
 			);
 		 */
 
-		$this->container['Config']
-			->expects($this->exactly(15))
-			->method('setSystemValue');
-
+		/** @var \PHPUnit_Framework_MockObject_MockObject $config */
+		$config = $this->container['Config'];
+		$config->expects($this->exactly(2))
+			->method('setSystemValues');
 		/**
 		 * FIXME: Use the following block once Jenkins uses PHPUnit >= 4.1
-		 */
-		/*
-		$this->container['Config']
-			->expects($this->exactly(3))
-			->method('deleteSystemValue')
 			->withConsecutive(
-				array($this->equalTo('mail_smtpauth')),
-				array($this->equalTo('mail_smtpname')),
-				array($this->equalTo('mail_smtppassword'))
+				[[
+					'mail_domain' => 'owncloud.com',
+					'mail_from_address' => 'demo@owncloud.com',
+					'mail_smtpmode' => 'smtp',
+					'mail_smtpsecure' => 'ssl',
+					'mail_smtphost' => 'mx.owncloud.org',
+					'mail_smtpauthtype' => 'NTLM',
+					'mail_smtpauth' => 1,
+					'mail_smtpport' => '25',
+				]],
+				[[
+					'mail_domain' => 'owncloud.com',
+					'mail_from_address' => 'demo@owncloud.com',
+					'mail_smtpmode' => 'smtp',
+					'mail_smtpsecure' => 'ssl',
+					'mail_smtphost' => 'mx.owncloud.org',
+					'mail_smtpauthtype' => 'NTLM',
+					'mail_smtpauth' => null,
+					'mail_smtpport' => '25',
+					'mail_smtpname' => null,
+					'mail_smtppassword' => null,
+				]]
 			);
-		*/
-		$this->container['Config']
-			->expects($this->exactly(3))
-			->method('deleteSystemValue');
+		 */
 
 		// With authentication
 		$response = $this->container['MailSettingsController']->setMailSettings(
@@ -124,21 +140,13 @@ class MailSettingscontrollerTest extends \PHPUnit_Framework_TestCase {
 			->method('t')
 			->will($this->returnValue('Saved'));
 
-		/**
-		 * FIXME: Use this block once Jenkins uses PHPUnit >= 4.1
-		 */
-		/*
 		$this->container['Config']
-			->expects($this->exactly(2))
-			->method('setSystemValue')
-			->withConsecutive(
-				array($this->equalTo('mail_smtpname'), $this->equalTo('UsernameToStore')),
-				array($this->equalTo('mail_smtppassword'), $this->equalTo('PasswordToStore'))
-			);
-		*/
-		$this->container['Config']
-			->expects($this->exactly(2))
-			->method('setSystemValue');
+			->expects($this->once())
+			->method('setSystemValues')
+			->with([
+				'mail_smtpname' => 'UsernameToStore',
+				'mail_smtppassword' => 'PasswordToStore',
+			]);
 
 		$response = $this->container['MailSettingsController']->storeCredentials('UsernameToStore', 'PasswordToStore');
 		$expectedResponse = array('data' => array('message' =>'Saved'), 'status' => 'success');
@@ -147,11 +155,6 @@ class MailSettingscontrollerTest extends \PHPUnit_Framework_TestCase {
 	}
 
 	public function testSendTestMail() {
-		/**
- 		 * FIXME: Disabled due to missing DI on mail class. 
- 		 * TODO: Re-enable when https://github.com/owncloud/core/pull/12085 is merged.
- 		 */
-		$this->markTestSkipped('Disable test until OC_Mail is rewritten.');
 		$user = $this->getMockBuilder('\OC\User\User')
 			->disableOriginalConstructor()
 			->getMock();
@@ -174,8 +177,8 @@ class MailSettingscontrollerTest extends \PHPUnit_Framework_TestCase {
 							'A problem occurred while sending the e-mail. Please revisit your settings.'),
 						array('Email sent', array(), 'Email sent'),
 						array('test email settings', array(), 'test email settings'),
-						array('If you received this email, the settings seems to be correct.', array(),
-							'If you received this email, the settings seems to be correct.')
+						array('If you received this email, the settings seem to be correct.', array(),
+							'If you received this email, the settings seem to be correct.')
 					)
 				));
 		$this->container['UserSession']

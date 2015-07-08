@@ -1,10 +1,26 @@
 <?php
-
 /**
- * Copyright (c) 2014 Robin Appelman <icewind@owncloud.com>
- * This file is licensed under the Affero General Public License version 3 or
- * later.
- * See the COPYING-README file.
+ * @author Björn Schießle <schiessle@owncloud.com>
+ * @author Lukas Reschke <lukas@owncloud.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Robin Appelman <icewind@owncloud.com>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
  */
 
 namespace OCA\Files_Sharing\Connector;
@@ -48,13 +64,29 @@ class PublicAuth extends \Sabre\DAV\Auth\Backend\AbstractBasic {
 		if (isset($linkItem['share_with'])) {
 			if ($linkItem['share_type'] == \OCP\Share::SHARE_TYPE_LINK) {
 				// Check Password
-				$forcePortable = (CRYPT_BLOWFISH != 1);
-				$hasher = new \PasswordHash(8, $forcePortable);
-				if (!$hasher->CheckPassword($password . $this->config->getSystemValue('passwordsalt', ''), $linkItem['share_with'])) {
-					return false;
-				} else {
+				$newHash = '';
+				if(\OC::$server->getHasher()->verify($password, $linkItem['share_with'], $newHash)) {
+					/**
+					 * FIXME: Migrate old hashes to new hash format
+					 * Due to the fact that there is no reasonable functionality to update the password
+					 * of an existing share no migration is yet performed there.
+					 * The only possibility is to update the existing share which will result in a new
+					 * share ID and is a major hack.
+					 *
+					 * In the future the migration should be performed once there is a proper method
+					 * to update the share's password. (for example `$share->updatePassword($password)`
+					 *
+					 * @link https://github.com/owncloud/core/issues/10671
+					 */
+					if(!empty($newHash)) {
+
+					}
 					return true;
+				} else {
+					return false;
 				}
+			} elseif ($linkItem['share_type'] == \OCP\Share::SHARE_TYPE_REMOTE) {
+				return true;
 			} else {
 				return false;
 			}

@@ -1,24 +1,50 @@
 <?php
 /**
- * Copyright (c) 2014 Arthur Schiwon <blizzz@owncloud.com>
- * This file is licensed under the Affero General Public License version 3 or
- * later.
- * See the COPYING-README file.
+ * @author Arthur Schiwon <blizzz@owncloud.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
  */
 
 namespace OCA\user_ldap\Command;
 
 use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 use OCA\user_ldap\lib\user\DeletedUsersIndex;
-use OCA\User_LDAP\lib\Connection;
-use OCA\User_LDAP\lib\Access;
+use OCP\IDateTimeFormatter;
 
 class ShowRemnants extends Command {
+	/** @var \OCA\User_LDAP\lib\User\DeletedUsersIndex */
+	protected $dui;
+
+	/** @var \OCP\IDateTimeFormatter */
+	protected $dateFormatter;
+
+	/**
+	 * @param OCA\user_ldap\lib\user\DeletedUsersIndex $dui
+	 * @param OCP\IDateTimeFormatter $dateFormatter
+	 */
+	public function __construct(DeletedUsersIndex $dui, IDateTimeFormatter $dateFormatter) {
+		$this->dui = $dui;
+		$this->dateFormatter = $dateFormatter;
+		parent::__construct();
+	}
 
 	protected function configure() {
 		$this
@@ -27,55 +53,35 @@ class ShowRemnants extends Command {
 		;
 	}
 
+	/**
+	 * executes the command, i.e. creeates and outputs a table of LDAP users marked as deleted
+	 *
+	 * {@inheritdoc}
+	 */
 	protected function execute(InputInterface $input, OutputInterface $output) {
-		$dui = new DeletedUsersIndex(
-			new \OC\Preferences(\OC_DB::getConnection()),
-			\OC::$server->getDatabaseConnection(),
-			$this->getAccess()
-		);
-
 		/** @var \Symfony\Component\Console\Helper\Table $table */
 		$table = $this->getHelperSet()->get('table');
 		$table->setHeaders(array(
 			'ownCloud name', 'Display Name', 'LDAP UID', 'LDAP DN', 'Last Login',
 			'Dir', 'Sharer'));
 		$rows = array();
-		$offset = 0;
-		do {
-			$resultSet = $dui->getUsers($offset);
-			$offset += count($resultSet);
-			foreach($resultSet as $user) {
-				$hAS = $user->getHasActiveShares() ? 'Y' : 'N';
-				$lastLogin = ($user->getLastLogin() > 0) ?
-					\OCP\Util::formatDate($user->getLastLogin()) : '-';
-				$rows[] = array(
-					$user->getOCName(),
-					$user->getDisplayName(),
-					$user->getUid(),
-					$user->getDN(),
-					$lastLogin,
-					$user->getHomePath(),
-					$hAS
-				);
-			}
-		} while (count($resultSet) === 10);
+		$resultSet = $this->dui->getUsers();
+		foreach($resultSet as $user) {
+			$hAS = $user->getHasActiveShares() ? 'Y' : 'N';
+			$lastLogin = ($user->getLastLogin() > 0) ?
+				$this->dateFormatter->formatDate($user->getLastLogin()) : '-';
+			$rows[] = array(
+				$user->getOCName(),
+				$user->getDisplayName(),
+				$user->getUid(),
+				$user->getDN(),
+				$lastLogin,
+				$user->getHomePath(),
+				$hAS
+			);
+		}
 
 		$table->setRows($rows);
 		$table->render($output);
 	}
-
-	protected function getAccess() {
-		$ldap = new \OCA\user_ldap\lib\LDAP();
-		$dummyConnection = new Connection($ldap, '', null);
-		$userManager = new \OCA\user_ldap\lib\user\Manager(
-			\OC::$server->getConfig(),
-			new \OCA\user_ldap\lib\FilesystemHelper(),
-			new \OCA\user_ldap\lib\LogWrapper(),
-			\OC::$server->getAvatarManager(),
-			new \OCP\Image()
-		);
-		$access = new Access($dummyConnection, $ldap, $userManager);
-		return $access;
-	}
-
 }

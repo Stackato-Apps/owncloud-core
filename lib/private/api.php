@@ -1,45 +1,67 @@
 <?php
 /**
-* ownCloud
-*
-* @author Tom Needham
-* @author Michael Gapczynski
-* @author Bart Visscher
-* @copyright 2012 Tom Needham tom@owncloud.com
-* @copyright 2012 Michael Gapczynski mtgap@owncloud.com
-* @copyright 2012 Bart Visscher bartv@thisnet.nl
-*
-* This library is free software; you can redistribute it and/or
-* modify it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE
-* License as published by the Free Software Foundation; either
-* version 3 of the License, or any later version.
-*
-* This library is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU AFFERO GENERAL PUBLIC LICENSE for more details.
-*
-* You should have received a copy of the GNU Affero General Public
-* License along with this library.  If not, see <http://www.gnu.org/licenses/>.
-*
-*/
+ * @author Bart Visscher <bartv@thisnet.nl>
+ * @author Bernhard Posselt <dev@bernhard-posselt.com>
+ * @author Björn Schießle <schiessle@owncloud.com>
+ * @author Joas Schilling <nickvergessen@owncloud.com>
+ * @author Jörn Friedrich Dreyer <jfd@butonic.de>
+ * @author Lukas Reschke <lukas@owncloud.com>
+ * @author Michael Gapczynski <GapczynskiM@gmail.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Robin Appelman <icewind@owncloud.com>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
+ * @author Tom Needham <tom@owncloud.com>
+ * @author Vincent Petry <pvince81@owncloud.com>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
+ */
 
 class OC_API {
 
 	/**
 	 * API authentication levels
 	 */
+
+	/** @deprecated Use \OCP\API::GUEST_AUTH instead */
 	const GUEST_AUTH = 0;
+
+	/** @deprecated Use \OCP\API::USER_AUTH instead */
 	const USER_AUTH = 1;
+
+	/** @deprecated Use \OCP\API::SUBADMIN_AUTH instead */
 	const SUBADMIN_AUTH = 2;
+
+	/** @deprecated Use \OCP\API::ADMIN_AUTH instead */
 	const ADMIN_AUTH = 3;
 
 	/**
 	 * API Response Codes
 	 */
+
+	/** @deprecated Use \OCP\API::RESPOND_UNAUTHORISED instead */
 	const RESPOND_UNAUTHORISED = 997;
+
+	/** @deprecated Use \OCP\API::RESPOND_SERVER_ERROR instead */
 	const RESPOND_SERVER_ERROR = 996;
+
+	/** @deprecated Use \OCP\API::RESPOND_NOT_FOUND instead */
 	const RESPOND_NOT_FOUND = 998;
+
+	/** @deprecated Use \OCP\API::RESPOND_UNKNOWN_ERROR instead */
 	const RESPOND_UNKNOWN_ERROR = 999;
 
 	/**
@@ -47,6 +69,7 @@ class OC_API {
 	 */
 	protected static $actions = array();
 	private static $logoutRequired = false;
+	private static $isLoggedIn = false;
 
 	/**
 	 * registers an api call
@@ -59,7 +82,7 @@ class OC_API {
 	 * @param array $requirements
 	 */
 	public static function register($method, $url, $action, $app,
-				$authLevel = OC_API::USER_AUTH,
+				$authLevel = \OCP\API::USER_AUTH,
 				$defaults = array(),
 				$requirements = array()) {
 		$name = strtolower($method).$url;
@@ -83,11 +106,14 @@ class OC_API {
 	 * @param array $parameters
 	 */
 	public static function call($parameters) {
+		$request = \OC::$server->getRequest();
+		$method = $request->getMethod();
+
 		// Prepare the request variables
-		if($_SERVER['REQUEST_METHOD'] == 'PUT') {
-			parse_str(file_get_contents("php://input"), $parameters['_put']);
-		} else if($_SERVER['REQUEST_METHOD'] == 'DELETE') {
-			parse_str(file_get_contents("php://input"), $parameters['_delete']);
+		if($method === 'PUT') {
+			$parameters['_put'] = $request->getParams();
+		} else if($method === 'DELETE') {
+			$parameters['_delete'] = $request->getParams();
 		}
 		$name = $parameters['_route'];
 		// Foreach registered action
@@ -97,7 +123,7 @@ class OC_API {
 			if(!self::isAuthorised($action)) {
 				$responses[] = array(
 					'app' => $action['app'],
-					'response' => new OC_OCS_Result(null, OC_API::RESPOND_UNAUTHORISED, 'Unauthorised'),
+					'response' => new OC_OCS_Result(null, \OCP\API::RESPOND_UNAUTHORISED, 'Unauthorised'),
 					'shipped' => OC_App::isShipped($action['app']),
 					);
 				continue;
@@ -105,7 +131,7 @@ class OC_API {
 			if(!is_callable($action['action'])) {
 				$responses[] = array(
 					'app' => $action['app'],
-					'response' => new OC_OCS_Result(null, OC_API::RESPOND_NOT_FOUND, 'Api method not found'),
+					'response' => new OC_OCS_Result(null, \OCP\API::RESPOND_NOT_FOUND, 'Api method not found'),
 					'shipped' => OC_App::isShipped($action['app']),
 					);
 				continue;
@@ -132,7 +158,7 @@ class OC_API {
 	 * @return array|\OC_OCS_Result
 	 */
 	public static function mergeResponses($responses) {
-		// Sort into shipped and thirdparty
+		// Sort into shipped and third-party
 		$shipped = array(
 			'succeeded' => array(),
 			'failed' => array(),
@@ -162,8 +188,8 @@ class OC_API {
 		if(!empty($shipped['failed'])) {
 			// Which shipped response do we use if they all failed?
 			// They may have failed for different reasons (different status codes)
-			// Which reponse code should we return?
-			// Maybe any that are not OC_API::RESPOND_SERVER_ERROR
+			// Which response code should we return?
+			// Maybe any that are not \OCP\API::RESPOND_SERVER_ERROR
 			// Merge failed responses if more than one
 			$data = array();
 			foreach($shipped['failed'] as $failure) {
@@ -226,15 +252,15 @@ class OC_API {
 	private static function isAuthorised($action) {
 		$level = $action['authlevel'];
 		switch($level) {
-			case OC_API::GUEST_AUTH:
+			case \OCP\API::GUEST_AUTH:
 				// Anyone can access
 				return true;
 				break;
-			case OC_API::USER_AUTH:
+			case \OCP\API::USER_AUTH:
 				// User required
 				return self::loginUser();
 				break;
-			case OC_API::SUBADMIN_AUTH:
+			case \OCP\API::SUBADMIN_AUTH:
 				// Check for subadmin
 				$user = self::loginUser();
 				if(!$user) {
@@ -249,7 +275,7 @@ class OC_API {
 					}
 				}
 				break;
-			case OC_API::ADMIN_AUTH:
+			case \OCP\API::ADMIN_AUTH:
 				// Check for admin
 				$user = self::loginUser();
 				if(!$user) {
@@ -269,30 +295,41 @@ class OC_API {
 	 * http basic auth
 	 * @return string|false (username, or false on failure)
 	 */
-	private static function loginUser(){
+	private static function loginUser() {
+		if(self::$isLoggedIn === true) {
+			return \OC_User::getUser();
+		}
 
 		// reuse existing login
 		$loggedIn = OC_User::isLoggedIn();
-		$ocsApiRequest = isset($_SERVER['HTTP_OCS_APIREQUEST']) ? $_SERVER['HTTP_OCS_APIREQUEST'] === 'true' : false;
-		if ($loggedIn === true && $ocsApiRequest) {
+		if ($loggedIn === true) {
+			$ocsApiRequest = isset($_SERVER['HTTP_OCS_APIREQUEST']) ? $_SERVER['HTTP_OCS_APIREQUEST'] === 'true' : false;
+			if ($ocsApiRequest) {
 
-			// initialize the user's filesystem
-			\OC_Util::setUpFS(\OC_User::getUser());
+				// initialize the user's filesystem
+				\OC_Util::setUpFS(\OC_User::getUser());
+				self::$isLoggedIn = true;
 
-			return OC_User::getUser();
+				return OC_User::getUser();
+			}
+			return false;
 		}
 
-		// basic auth
-		$authUser = isset($_SERVER['PHP_AUTH_USER']) ? $_SERVER['PHP_AUTH_USER'] : '';
-		$authPw = isset($_SERVER['PHP_AUTH_PW']) ? $_SERVER['PHP_AUTH_PW'] : '';
-		$return = OC_User::login($authUser, $authPw);
-		if ($return === true) {
-			self::$logoutRequired = true;
+		// basic auth - because OC_User::login will create a new session we shall only try to login
+		// if user and pass are set
+		if(isset($_SERVER['PHP_AUTH_USER']) && isset($_SERVER['PHP_AUTH_PW']) ) {
+			$authUser = $_SERVER['PHP_AUTH_USER'];
+			$authPw = $_SERVER['PHP_AUTH_PW'];
+			$return = OC_User::login($authUser, $authPw);
+			if ($return === true) {
+				self::$logoutRequired = true;
 
-			// initialize the user's filesystem
-			\OC_Util::setUpFS(\OC_User::getUser());
+				// initialize the user's filesystem
+				\OC_Util::setUpFS(\OC_User::getUser());
+				self::$isLoggedIn = true;
 
-			return $authUser;
+				return \OC_User::getUser();
+			}
 		}
 
 		return false;
@@ -305,7 +342,7 @@ class OC_API {
 	 */
 	public static function respond($result, $format='xml') {
 		// Send 401 headers if unauthorised
-		if($result->getStatusCode() === self::RESPOND_UNAUTHORISED) {
+		if($result->getStatusCode() === \OCP\API::RESPOND_UNAUTHORISED) {
 			header('WWW-Authenticate: Basic realm="Authorisation Required"');
 			header('HTTP/1.0 401 Unauthorized');
 		}
@@ -364,7 +401,7 @@ class OC_API {
 	 * Based on the requested format the response content type is set
 	 */
 	public static function setContentType() {
-		$format = \OC_API::requestedFormat();
+		$format = self::requestedFormat();
 		if ($format === 'xml') {
 			header('Content-type: text/xml; charset=UTF-8');
 			return;

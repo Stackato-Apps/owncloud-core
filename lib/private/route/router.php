@@ -1,18 +1,41 @@
 <?php
 /**
- * Copyright (c) 2012 Bart Visscher <bartv@thisnet.nl>
- * This file is licensed under the Affero General Public License version 3 or
- * later.
- * See the COPYING-README file.
+ * @author Bart Visscher <bartv@thisnet.nl>
+ * @author Bernhard Posselt <dev@bernhard-posselt.com>
+ * @author Joas Schilling <nickvergessen@owncloud.com>
+ * @author Jörn Friedrich Dreyer <jfd@butonic.de>
+ * @author Lukas Reschke <lukas@owncloud.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Robin Appelman <icewind@owncloud.com>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
+ * @author Vincent Petry <pvince81@owncloud.com>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
  */
 
 namespace OC\Route;
 
 use OCP\Route\IRouter;
+use OCP\AppFramework\App;
 use Symfony\Component\Routing\Matcher\UrlMatcher;
 use Symfony\Component\Routing\Generator\UrlGenerator;
 use Symfony\Component\Routing\RequestContext;
 use Symfony\Component\Routing\RouteCollection;
+use Symfony\Component\Routing\Exception\ResourceNotFoundException;
 
 class Router implements IRouter {
 	/**
@@ -61,8 +84,9 @@ class Router implements IRouter {
 		} else {
 			$method = 'GET';
 		}
-		$host = \OC_Request::serverHost();
-		$schema = \OC_Request::serverProtocol();
+		$request = \OC::$server->getRequest();
+		$host = $request->getServerHost();
+		$schema = $request->getServerProtocol();
 		$this->context = new RequestContext($baseUrl, $method, $host, $schema);
 		// TODO cache
 		$this->root = $this->getCollection('root');
@@ -105,6 +129,7 @@ class Router implements IRouter {
 	 * @return void
 	 */
 	public function loadRoutes($app = null) {
+		$requestedApp = $app;
 		if ($this->loaded) {
 			return;
 		}
@@ -122,11 +147,12 @@ class Router implements IRouter {
 				$routingFiles = array();
 			}
 		}
+		\OC::$server->getEventLogger()->start('loadroutes' . $requestedApp, 'Loading Routes');
 		foreach ($routingFiles as $app => $file) {
 			if (!isset($this->loadedApps[$app])) {
 				$this->loadedApps[$app] = true;
 				$this->useCollection($app);
-				$this->requireRouteFile($file);
+				$this->requireRouteFile($file, $app);
 				$collection = $this->getCollection($app);
 				$collection->addPrefix('/apps/' . $app);
 				$this->root->addCollection($collection);
@@ -144,6 +170,7 @@ class Router implements IRouter {
 			$collection->addPrefix('/ocs');
 			$this->root->addCollection($collection);
 		}
+		\OC::$server->getEventLogger()->end('loadroutes' . $requestedApp);
 	}
 
 	/**
@@ -217,12 +244,30 @@ class Router implements IRouter {
 		} else {
 			$this->loadRoutes();
 		}
+
 		$matcher = new UrlMatcher($this->root, $this->context);
-		$parameters = $matcher->match($url);
+		try {
+			$parameters = $matcher->match($url);
+		} catch (ResourceNotFoundException $e) {
+			if (substr($url, -1) !== '/') {
+				// We allow links to apps/files? for backwards compatibility reasons
+				// However, since Symfony does not allow empty route names, the route
+				// we need to match is '/', so we need to append the '/' here.
+				try {
+					$parameters = $matcher->match($url . '/');
+				} catch (ResourceNotFoundException $newException) {
+					// If we still didn't match a route, we throw the original exception
+					throw $e;
+				}
+			} else {
+				throw $e;
+			}
+		}
+
+		\OC::$server->getEventLogger()->start('run_route', 'Run route');
 		if (isset($parameters['action'])) {
 			$action = $parameters['action'];
 			if (!is_callable($action)) {
-				var_dump($action);
 				throw new \Exception('not a callable action');
 			}
 			unset($parameters['action']);
@@ -232,6 +277,7 @@ class Router implements IRouter {
 		} else {
 			throw new \Exception('no action available');
 		}
+		\OC::$server->getEventLogger()->end('run_route');
 	}
 
 	/**
@@ -262,10 +308,39 @@ class Router implements IRouter {
 
 	/**
 	 * To isolate the variable scope used inside the $file it is required in it's own method
-	 * @param string $file
+	 * @param string $file the route file location to include
+	 * @param string $appName
 	 */
-	private function requireRouteFile($file) {
-		require_once $file;
+	private function requireRouteFile($file, $appName) {
+		$this->setupRoutes(include_once $file, $appName);
 	}
+
+
+	/**
+	 * If a routes.php file returns an array, try to set up the application and
+	 * register the routes for the app. The application class will be chosen by
+	 * camelcasing the appname, e.g.: my_app will be turned into
+	 * \OCA\MyApp\AppInfo\Application. If that class does not exist, a default
+	 * App will be intialized. This makes it optional to ship an
+	 * appinfo/application.php by using the built in query resolver
+	 * @param array $routes the application routes
+	 * @param string $appName the name of the app.
+	 */
+	private function setupRoutes($routes, $appName) {
+		if (is_array($routes)) {
+			$appNameSpace = App::buildAppNamespace($appName);
+
+			$applicationClassName = $appNameSpace . '\\AppInfo\\Application';
+
+			if (class_exists($applicationClassName)) {
+				$application = new $applicationClassName();
+			} else {
+				$application = new App($appName);
+			}
+
+			$application->registerRoutes($this, $routes);
+		}
+	}
+
 
 }

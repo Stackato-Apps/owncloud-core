@@ -15,7 +15,7 @@ ul { list-style:none; }
 
 
 body {
-	background: #fefefe;
+	background-color: #ffffff;
 	font-weight: normal;
 	font-size: .8em;
 	line-height: 1.6em;
@@ -36,7 +36,14 @@ body {
 	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#35537a', endColorstr='#1d2d44',GradientType=0 ); /* IE6-9 */
 }
 
-
+.float-spinner {
+	height: 32px;
+	display: none;
+}
+#body-login .float-spinner {
+	margin-top: -32px;
+	padding-top: 32px;
+}
 
 #nojavascript {
 	position: fixed;
@@ -68,7 +75,14 @@ body {
 }
 
 
+
 /* INPUTS */
+
+/* specifically override browser styles */
+input, textarea, select, button {
+	font-family: 'Open Sans', Frutiger, Calibri, 'Myriad Pro', Myriad, sans-serif;
+}
+
 input[type="text"],
 input[type="password"],
 input[type="search"],
@@ -130,7 +144,8 @@ input[type="url"]:hover, input[type="url"]:focus, input[type="url"]:active,
 input[type="time"]:hover, input[type="time"]:focus, input[type="time"]:active,
 textarea:hover, textarea:focus, textarea:active {
 	color: #333;
-	-ms-filter:"progid:DXImageTransform.Microsoft.Alpha(Opacity=100)"; filter:alpha(opacity=100); opacity:1;
+	-ms-filter: "progid:DXImageTransform.Microsoft.Alpha(Opacity=100)";
+	opacity: 1;
 }
 input[type="checkbox"] { margin:0; padding:0; height:auto; width:auto; }
 input[type="checkbox"]:hover+label, input[type="checkbox"]:focus+label { color:#111 !important; }
@@ -192,9 +207,10 @@ input[type="submit"]:hover, input[type="submit"]:focus,
 input[type="button"]:hover, input[type="button"]:focus,
 button:hover, button:focus,
 .button:hover, .button:focus,
+.button a:focus,
 select:hover, select:focus, select:active {
-	background-color:rgba(250,250,250,.9);
-	color:#333;
+	background-color: rgba(255, 255, 255, .95);
+	color: #111;
 }
 input[type="submit"] img, input[type="button"] img, button img, .button img { cursor:pointer; }
 #header .button {
@@ -212,6 +228,10 @@ textarea:disabled {
 	color: #999;
 	cursor: default;
 }
+input:disabled+label, input:disabled:hover+label, input:disabled:focus+label {
+	color: #999 !important;
+	cursor: default;
+}
 
 /* Primary action button, use sparingly */
 .primary, input[type="submit"].primary, input[type="button"].primary, button.primary, .button.primary {
@@ -221,12 +241,13 @@ textarea:disabled {
 }
 	.primary:hover, input[type="submit"].primary:hover, input[type="button"].primary:hover, button.primary:hover, .button.primary:hover,
 	.primary:focus, input[type="submit"].primary:focus, input[type="button"].primary:focus, button.primary:focus, .button.primary:focus {
-		border: 1px solid #1d2d44;
 		background-color: #304d76;
 		color: #fff;
 	}
-	.primary:active, input[type="submit"].primary:active, input[type="button"].primary:active, button.primary:active, .button.primary:active {
-		border: 1px solid #1d2d44;
+	.primary:active, input[type="submit"].primary:active, input[type="button"].primary:active, button.primary:active, .button.primary:active,
+	.primary:disabled, input[type="submit"].primary:disabled, input[type="button"].primary:disabled, button.primary:disabled, .button.primary:disabled,
+	.primary:disabled:hover, input[type="submit"].primary:disabled:hover, input[type="button"].primary:disabled:hover, button.primary:disabled:hover, .button.primary:disabled:hover,
+	.primary:disabled:focus, input[type="submit"].primary:disabled:focus, input[type="button"].primary:disabled:focus, button.primary:disabled:focus, .button.primary:disabled:focus {
 		background-color: #1d2d44;
 		color: #bbb;
 	}
@@ -235,13 +256,21 @@ textarea:disabled {
 .searchbox input[type="search"] {
 	position: relative;
 	font-size: 1.2em;
-	padding-left: 1.5em;
-	background: #fff url('../img/actions/search.svg') no-repeat .5em center;
+	padding: 3px;
+	padding-left: 25px;
+	background: #fff url('../img/actions/search.svg') no-repeat 6px center;
 	border: 0;
-	border-radius: 2em;
-	-ms-filter: "progid:DXImageTransform.Microsoft.Alpha(Opacity=70)"; filter:alpha(opacity=70); opacity: .7;
-	margin-top: 6px;
+	border-radius: 3px;
+	-ms-filter: "progid:DXImageTransform.Microsoft.Alpha(Opacity=30)";
+	opacity: .3;
+	margin-top: 9px;
 	float: right;
+}
+.searchbox input[type="search"]:hover,
+.searchbox input[type="search"]:focus,
+.searchbox input[type="search"]:active {
+	-ms-filter: "progid:DXImageTransform.Microsoft.Alpha(Opacity=70)";
+	opacity: .7;
 }
 
 input[type="submit"].enabled {
@@ -320,13 +349,30 @@ input[type="submit"].enabled {
 	overflow-x: auto;
 }
 
-#emptycontent {
+#emptycontent,
+.emptycontent {
 	font-size: 16px;
 	color: #888;
 	position: absolute;
 	text-align: center;
 	top: 30%;
 	width: 100%;
+}
+#emptycontent h2,
+.emptycontent h2 {
+	font-size: 22px;
+	margin-bottom: 10px;
+}
+#emptycontent [class^="icon-"],
+.emptycontent [class^="icon-"],
+#emptycontent [class*=" icon-"],
+.emptycontent [class*=" icon-"] {
+	background-size: 64px;
+	height: 64px;
+	width: 64px;
+	margin: 0 auto 15px;
+	-ms-filter: "progid:DXImageTransform.Microsoft.Alpha(Opacity=40)";
+	opacity: .4;
 }
 
 
@@ -350,14 +396,24 @@ input[type="submit"].enabled {
 	text-align: center;
 	color: #ccc;
 	-ms-filter: "progid:DXImageTransform.Microsoft.Alpha(Opacity=60)";
-	filter: alpha(opacity=60);
 	opacity: .6;
+}
+/* overrides another !important statement that sets this to unreadable black */
+#body-login form .warning input[type="checkbox"]:hover+label,
+#body-login form .warning input[type="checkbox"]:focus+label,
+#body-login form .warning input[type="checkbox"]+label {
+	color: #fff !important;
 }
 
 #body-login .update h2 {
-	font-weight: bold;
-	font-size: 18px;
+	font-size: 20px;
+	line-height: 130%;
 	margin-bottom: 30px;
+}
+
+#body-login .update a {
+	color: #fff;
+	border-bottom: 1px solid #aaa;
 }
 
 #body-login .infogroup {
@@ -369,7 +425,9 @@ input[type="submit"].enabled {
 	padding: 5px;
 }
 
-#body-login div.buttons { text-align:center; }
+#body-login div.buttons {
+	text-align: center;
+}
 #body-login p.info {
 	width: 22em;
 	margin: 0 auto;
@@ -380,17 +438,28 @@ input[type="submit"].enabled {
 	padding: 13px;
 	margin: -13px;
 }
-#body-login #submit.login { margin-right:7px; } /* quick fix for log in button not being aligned with input fields, should be properly fixed by input field width later */
-
-#body-login form { width:22em; margin:2em auto 2em; padding:0; }
+/* quick fix for log in button not being aligned with input fields, should be properly fixed by input field width later */
+#body-login #submit.login {
+	margin-right: 7px;
+}
+#body-login form {
+	width: 22em;
+	margin: 2em auto 2em;
+	padding: 0;
+}
 #body-login form fieldset {
 	margin-bottom: 20px;
 	text-align: left;
 }
-#body-login form #adminaccount { margin-bottom:15px; }
+#body-login form #sqliteInformation {
+	margin-top: -20px;
+	margin-bottom: 20px;
+}
+#body-login form #adminaccount {
+	margin-bottom: 15px;
+}
 #body-login form fieldset legend, #datadirContent label {
 	width: 100%;
-	font-weight: bold;
 }
 #body-login #datadirContent label {
 	display: block;
@@ -405,6 +474,9 @@ input[type="submit"].enabled {
 #body-login #showAdvanced img {
 	vertical-align: bottom; /* adjust position of Advanced dropdown arrow */
 	margin-left: -4px;
+}
+#body-login .icon-info-white {
+	padding: 10px;
 }
 
 /* strengthify wrapper */
@@ -440,7 +512,6 @@ input[name='password-clone'] {
 	left: 16px;
 	top: 22px;
 	-ms-filter: "progid:DXImageTransform.Microsoft.Alpha(Opacity=30)";
-	filter: alpha(opacity=30);
 	opacity: .3;
 }
 #adminpass-icon, #password-icon {
@@ -544,7 +615,6 @@ label.infield {
 }
 #show:checked + label, #dbpassword:checked + label, #personal-show:checked + label {
 	-ms-filter: "progid:DXImageTransform.Microsoft.Alpha(Opacity=80)";
-	filter: alpha(opacity=80);
 	opacity: .8;
 }
 #show + label, #dbpassword + label, #personal-show + label {
@@ -555,7 +625,6 @@ label.infield {
 	background-repeat: no-repeat;
 	background-position: center;
 	-ms-filter: "progid:DXImageTransform.Microsoft.Alpha(Opacity=30)";
-	filter: alpha(opacity=30);
 	opacity: .3;
 }
 #pass2, input[name="personal-password-clone"] {
@@ -573,16 +642,21 @@ label.infield {
 
 /* Database selector */
 #body-login form #selectDbType { text-align:center; white-space: nowrap; }
+#body-login form #selectDbType .info {
+	white-space: normal;
+}
 #body-login form #selectDbType label {
 	position:static; margin:0 -3px 5px; padding:.4em;
-	font-size:12px; font-weight:bold; background:#f8f8f8; color:#888; cursor:pointer;
+	font-size:12px; background:#f8f8f8; color:#888; cursor:pointer;
 	border: 1px solid #ddd;
 }
 #body-login form #selectDbType label.ui-state-hover, #body-login form #selectDbType label.ui-state-active { color:#000; background-color:#e8e8e8; }
 
 
 /* Warnings and errors are the same */
-#body-login .warning, #body-login .update, #body-login .error {
+#body-login .warning,
+#body-login .update,
+#body-login .error {
 	display: block;
 	padding: 10px;
 	background-color: rgba(0,0,0,.3);
@@ -633,6 +707,10 @@ label.infield {
 	color: black !important;
 }
 
+.warning-input {
+	border-color: #ce3702 !important;
+}
+
 /* Fixes for log in page, TODO should be removed some time */
 #body-login .update,
 #body-login .error {
@@ -643,7 +721,6 @@ label.infield {
 }
 #body-login .warning legend {
 	-ms-filter: "progid:DXImageTransform.Microsoft.Alpha(Opacity=100)";
-	filter: alpha(opacity=100);
 	opacity: 1;
 }
 #body-login a.warning {
@@ -697,7 +774,18 @@ label.infield {
 
 
 /* VARIOUS REUSABLE SELECTORS */
-.hidden { display:none; }
+.hidden {
+	display: none;
+}
+.hidden-visually {
+	position: absolute;
+	left:-10000px;
+	top: auto;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+}
+
 .bold { font-weight:bold; }
 .center { text-align:center; }
 .inlineblock { display: inline-block; }
@@ -711,7 +799,7 @@ label.infield {
 #notification, #update-notification {
 	margin: 0 auto;
 	max-width: 60%;
-	z-index: 101;
+	z-index: 8000;
 	background-color: #fc4;
 	border: 0;
 	padding: 1px 8px;
@@ -720,22 +808,48 @@ label.infield {
 	top: 0;
 	border-bottom-left-radius: 3px;
 	border-bottom-right-radius: 3px;
-	-ms-filter:"progid:DXImageTransform.Microsoft.Alpha(Opacity=90)";
-	filter:alpha(opacity=90);
+	-ms-filter: "progid:DXImageTransform.Microsoft.Alpha(Opacity=90)";
 	opacity: .9;
 }
 #notification span, #update-notification span {
 	cursor: pointer;
-	font-weight: bold;
 	margin-left: 1em;
 }
 
-tr .action:not(.permanent), .selectedActions a { -ms-filter:"progid:DXImageTransform.Microsoft.Alpha(Opacity=0)"; filter:alpha(opacity=0); opacity:0; }
-tr:hover .action, tr .action.permanent, .selectedActions a { -ms-filter:"progid:DXImageTransform.Microsoft.Alpha(Opacity=50)"; filter:alpha(opacity=50); opacity:.5; }
-tr .action { width:16px; height:16px; }
-.header-action { -ms-filter:"progid:DXImageTransform.Microsoft.Alpha(Opacity=80)"; filter:alpha(opacity=80); opacity:.8; }
-tr:hover .action:hover, .selectedActions a:hover, .header-action:hover { -ms-filter:"progid:DXImageTransform.Microsoft.Alpha(Opacity=100)"; filter:alpha(opacity=100); opacity:1; }
-tbody tr:hover, tr:active { background-color:#f8f8f8; }
+tr .action:not(.permanent),
+.selectedActions a {
+	-ms-filter: "progid:DXImageTransform.Microsoft.Alpha(Opacity=0)";
+	opacity: 0;
+}
+tr:hover .action,
+tr:focus .action,
+tr .action.permanent,
+.selectedActions a {
+	-ms-filter: "progid:DXImageTransform.Microsoft.Alpha(Opacity=50)";
+	opacity: .5;
+}
+tr .action {
+	width: 16px;
+	height: 16px;
+}
+.header-action {
+	-ms-filter: "progid:DXImageTransform.Microsoft.Alpha(Opacity=80)";
+	opacity: .8;
+}
+tr:hover .action:hover,
+tr:focus .action:focus,
+.selectedActions a:hover,
+.selectedActions a:focus,
+.header-action:hover,
+.header-action:focus {
+	-ms-filter: "progid:DXImageTransform.Microsoft.Alpha(Opacity=100)";
+	opacity: 1;
+}
+tbody tr:hover,
+tbody tr:focus,
+tbody tr:active {
+	background-color: #f8f8f8;
+}
 
 code { font-family:"Lucida Console", "Lucida Sans Typewriter", "DejaVu Sans Mono", monospace; }
 
@@ -749,8 +863,15 @@ code { font-family:"Lucida Console", "Lucida Sans Typewriter", "DejaVu Sans Mono
 	font-weight: normal;
 	white-space: nowrap;
 	border-bottom-left-radius: 3px;
-	border-top-left-radius: 3px; }
+	border-top-left-radius: 3px;
+	min-width: 1%;
+	max-width: 100%;
+}
 #quotatext {padding:.6em 1em;}
+
+#quota div.quota-warning {
+	background-color: #fc4;
+}
 
 .pager { list-style:none; float:right; display:inline; margin:.7em 13em 0 0; }
 .pager li { display:inline-block; }
@@ -773,7 +894,7 @@ a.bookmarklet { background-color:#ddd; border:1px solid #ccc; padding:5px;paddin
 	background-image:url('../img/places/home.svg');
 	background-repeat:no-repeat;
 	background-position: left center;
-	width: 26px;
+	width: 30px;
 	display: inline-block;
 }
 #oc-dialog-filepicker-content .dirtree span:not(:last-child) { cursor: pointer; }
@@ -816,6 +937,16 @@ span.ui-icon {float: left; margin: 3px 7px 30px 0;}
 	height: 16px;
 }
 
+/* ---- TOOLTIPS ---- */
+.extra-data {
+	padding-right: 5px !important;
+}
+.tipsy-inner {
+	max-width: 400px !important;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 /* ---- TAGS ---- */
 #tagsdialog .content {
 	width: 100%; height: 280px;
@@ -845,7 +976,7 @@ span.ui-icon {float: left; margin: 3px 7px 30px 0;}
 .popup.topright { top:7em; right:1em; }
 .popup.bottomleft { bottom:1em; left:33em; }
 .popup .close { position:absolute; top:0.2em; right:0.2em; height:20px; width:20px; background:url('../img/actions/close.svg') no-repeat center; }
-.popup h2 { font-weight:bold; font-size:1.2em; }
+.popup h2 { font-size:20px; }
 .arrow { border-bottom:10px solid white; border-left:10px solid transparent; border-right:10px solid transparent; display:block; height:0; position:absolute; width:0; z-index:201; }
 .arrow.left { left:-13px; bottom:1.2em; -webkit-transform:rotate(270deg); -moz-transform:rotate(270deg); -o-transform:rotate(270deg); -ms-transform:rotate(270deg); transform:rotate(270deg); }
 .arrow.up { top:-8px; right:6px; }
@@ -878,13 +1009,18 @@ div.crumb.last {
 	font-weight: bold;
 	margin-right: 10px;
 }
+div.crumb a.ellipsislink {
+	padding: 0 !important;
+	position: relative;
+	top: 8px !important;
+}
 
 /* some feedback for hover/tap on breadcrumbs */
 div.crumb:hover,
 div.crumb:focus,
+div.crumb a:focus,
 div.crumb:active {
 	-ms-filter:"progid:DXImageTransform.Microsoft.Alpha(Opacity=70)";
-	filter:alpha(opacity=70);
 	opacity:.7;
 }
 
@@ -900,6 +1036,28 @@ div.crumb:active {
 	opacity: 0;
 }
 
+
+/* public footer */
+#body-public footer {
+	margin-top: 65px;
+	text-align: center;
+}
+
+#body-public footer .info {
+	color: #777;
+	text-align: center;
+	margin: 0 auto;
+	padding: 20px 0;
+}
+
+#body-public footer .info a {
+	color: #777;
+	font-weight: bold;
+	padding: 13px;
+	margin: -13px;
+}
+
+
 /* LEGACY FIX only - do not use fieldsets for settings */
 fieldset.warning legend, fieldset.update legend {
 	top: 18px;
@@ -914,4 +1072,3 @@ fieldset.warning legend + p, fieldset.update legend + p {
 @-ms-viewport {
 	width: device-width;
 }
-

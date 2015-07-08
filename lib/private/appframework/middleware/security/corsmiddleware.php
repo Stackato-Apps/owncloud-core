@@ -1,12 +1,23 @@
 <?php
 /**
- * ownCloud - App Framework
- *
- * This file is licensed under the Affero General Public License version 3 or
- * later. See the COPYING file.
- *
  * @author Bernhard Posselt <dev@bernhard-posselt.com>
- * @copyright Bernhard Posselt 2014
+ * @author Morris Jobke <hey@morrisjobke.de>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
  */
 
 namespace OC\AppFramework\Middleware\Security;
@@ -29,10 +40,12 @@ class CORSMiddleware extends Middleware {
 	 * @var IRequest
 	 */
 	private $request;
+
 	/**
 	 * @var ControllerMethodReflector
 	 */
 	private $reflector;
+
 	/**
 	 * @var IUserSession
 	 */
@@ -58,7 +71,7 @@ class CORSMiddleware extends Middleware {
 	 * @param Controller $controller the controller that is being called
 	 * @param string $methodName the name of the method that will be called on
 	 *                           the controller
-	 * @since 7.0.0
+	 * @since 6.0.0
 	 */
 	public function beforeController($controller, $methodName){
 		// ensure that @CORS annotated API routes are not used in conjunction
@@ -67,6 +80,7 @@ class CORSMiddleware extends Middleware {
 			!$this->reflector->hasAnnotation('PublicPage'))  {
 			$user = $this->request->server['PHP_AUTH_USER'];
 			$pass = $this->request->server['PHP_AUTH_PW'];
+
 			$this->session->logout();
 			if(!$this->session->login($user, $pass)) {
 				throw new SecurityException('CORS requires basic auth');

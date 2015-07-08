@@ -1,9 +1,23 @@
 <?php
 /**
- * Copyright (c) 2014 Lukas Reschke <lukas@owncloud.com>
- * This file is licensed under the Affero General Public License version 3 or
- * later.
- * See the COPYING-README file.
+ * @author Lukas Reschke <lukas@owncloud.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
  */
 
 
@@ -12,6 +26,7 @@ namespace OC\Security;
 use Crypt_AES;
 use Crypt_Hash;
 use OCP\Security\ICrypto;
+use OCP\Security\ISecureRandom;
 use OCP\Security\StringUtils;
 use OCP\IConfig;
 
@@ -32,29 +47,13 @@ class Crypto implements ICrypto {
 	private $ivLength = 16;
 	/** @var IConfig */
 	private $config;
+	/** @var ISecureRandom */
+	private $random;
 
-	/**
-	 * @param IConfig $config
-	 */
-	function __construct(IConfig $config) {
+	function __construct(IConfig $config, ISecureRandom $random) {
 		$this->cipher = new Crypt_AES();
 		$this->config = $config;
-	}
-
-	/**
-	 * Custom implementation of hex2bin since the function is only available starting
-	 * with PHP 5.4
-	 *
-	 * @TODO Remove this once 5.3 support for ownCloud is dropped
-	 * @param $message
-	 * @return string
-	 */
-	protected static function hexToBin($message) {
-		if (function_exists('hex2bin')) {
-			return hex2bin($message);
-		}
-
-		return pack("H*", $message);
+		$this->random = $random;
 	}
 
 	/**
@@ -87,7 +86,7 @@ class Crypto implements ICrypto {
 		}
 		$this->cipher->setPassword($password);
 
-		$iv = \OC_Util::generateRandomBytes($this->ivLength);
+		$iv = $this->random->getLowStrengthGenerator()->generate($this->ivLength);
 		$this->cipher->setIV($iv);
 
 		$ciphertext = bin2hex($this->cipher->encrypt($plaintext));
@@ -114,9 +113,9 @@ class Crypto implements ICrypto {
 			throw new \Exception('Authenticated ciphertext could not be decoded.');
 		}
 
-		$ciphertext = self::hexToBin($parts[0]);
+		$ciphertext = hex2bin($parts[0]);
 		$iv = $parts[1];
-		$hmac = self::hexToBin($parts[2]);
+		$hmac = hex2bin($parts[2]);
 
 		$this->cipher->setIV($iv);
 

@@ -1,30 +1,50 @@
 <?php
 /**
- * Copyright (c) 2013 Georg Ehrke georg@ownCloud.com
- * This file is licensed under the Affero General Public License version 3 or
- * later.
- * See the COPYING-README file.
+ * @author Georg Ehrke <georg@owncloud.com>
+ * @author Joas Schilling <nickvergessen@owncloud.com>
+ * @author Nmz <nemesiz@nmz.lt>
+ * @author Robin Appelman <icewind@owncloud.com>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
  */
 namespace OC\Preview;
 
 class TXT extends Provider {
-
+	/**
+	 * {@inheritDoc}
+	 */
 	public function getMimeType() {
 		return '/text\/plain/';
 	}
 
 	/**
-	 * @param string $path
-	 * @param int $maxX
-	 * @param int $maxY
-	 * @param boolean $scalingup
-	 * @param \OC\Files\View $fileview
-	 * @return bool|\OC_Image
+	 * {@inheritDoc}
+	 */
+	public function isAvailable(\OCP\Files\FileInfo $file) {
+		return $file->getSize() > 0;
+	}
+
+	/**
+	 * {@inheritDoc}
 	 */
 	public function getThumbnail($path, $maxX, $maxY, $scalingup, $fileview) {
-
 		$content = $fileview->fopen($path, 'r');
-		$content = stream_get_contents($content);
+		$content = stream_get_contents($content,3000);
 
 		//don't create previews of empty text files
 		if(trim($content) === '') {
@@ -33,7 +53,7 @@ class TXT extends Provider {
 
 		$lines = preg_split("/\r\n|\n|\r/", $content);
 
-		$fontSize = 5; //5px
+		$fontSize = ($maxX) ? (int) ((5 / 36) * $maxX) : 5; //5px
 		$lineSize = ceil($fontSize * 1.25);
 
 		$image = imagecreate($maxX, $maxY);
@@ -69,15 +89,3 @@ class TXT extends Provider {
 		return $image->valid() ? $image : false;
 	}
 }
-
-\OC\Preview::registerProvider('OC\Preview\TXT');
-
-class MarkDown extends TXT {
-
-	public function getMimeType() {
-		return '/text\/(x-)?markdown/';
-	}
-
-}
-
-\OC\Preview::registerProvider('OC\Preview\MarkDown');

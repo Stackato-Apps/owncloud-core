@@ -1,12 +1,32 @@
 <?php
 /**
- * Copyright (c) 2014 Andreas Fischer <bantu@owncloud.com>
- * This file is licensed under the Affero General Public License version 3 or
- * later.
- * See the COPYING-README file.
+ * @author Andreas Fischer <bantu@owncloud.com>
+ * @author Jörn Friedrich Dreyer <jfd@butonic.de>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Robin Appelman <icewind@owncloud.com>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
  */
 
 namespace OC\DB;
+use Doctrine\DBAL\Event\Listeners\OracleSessionInit;
+use Doctrine\DBAL\Event\Listeners\SQLSessionInit;
+use Doctrine\DBAL\Event\Listeners\MysqlSessionInit;
 
 /**
 * Takes care of creating and configuring Doctrine connections.
@@ -84,10 +104,17 @@ class ConnectionFactory {
 			case 'mysql':
 				// Send "SET NAMES utf8". Only required on PHP 5.3 below 5.3.6.
 				// See http://stackoverflow.com/questions/4361459/php-pdo-charset-set-names#4361485
-				$eventManager->addEventSubscriber(new \Doctrine\DBAL\Event\Listeners\MysqlSessionInit);
+				$eventManager->addEventSubscriber(new MysqlSessionInit);
+				$eventManager->addEventSubscriber(
+					new SQLSessionInit("SET SESSION AUTOCOMMIT=1"));
 				break;
 			case 'oci':
-				$eventManager->addEventSubscriber(new \Doctrine\DBAL\Event\Listeners\OracleSessionInit);
+				$eventManager->addEventSubscriber(new OracleSessionInit);
+				break;
+			case 'sqlite3':
+				$journalMode = $additionalConnectionParams['sqlite.journal_mode'];
+				$additionalConnectionParams['platform'] = new OCSqlitePlatform();
+				$eventManager->addEventSubscriber(new SQLiteSessionInit(true, $journalMode));
 				break;
 			case 'sqlite3':
 				$eventManager->addEventSubscriber(new SQLiteSessionInit);
@@ -98,14 +125,6 @@ class ConnectionFactory {
 			new \Doctrine\DBAL\Configuration(),
 			$eventManager
 		);
-		switch ($normalizedType) {
-			case 'sqlite3':
-				// Sqlite doesn't handle query caching and schema changes
-				// TODO: find a better way to handle this
-				/** @var $connection \OC\DB\Connection */
-				$connection->disableQueryStatementCaching();
-				break;
-		}
 		return $connection;
 	}
 
@@ -125,5 +144,50 @@ class ConnectionFactory {
 	public function isValidType($type) {
 		$normalizedType = $this->normalizeType($type);
 		return isset($this->defaultConnectionParams[$normalizedType]);
+	}
+
+	/**
+	 * Create the connection parameters for the config
+	 *
+	 * @param \OC\SystemConfig $config
+	 * @return array
+	 */
+	public function createConnectionParams($config) {
+		$type = $config->getValue('dbtype', 'sqlite');
+
+		$connectionParams = array(
+			'user' => $config->getValue('dbuser', ''),
+			'password' => $config->getValue('dbpassword', ''),
+		);
+		$name = $config->getValue('dbname', 'owncloud');
+
+		if ($this->normalizeType($type) === 'sqlite3') {
+			$dataDir = $config->getValue("datadirectory", \OC::$SERVERROOT . '/data');
+			$connectionParams['path'] = $dataDir . '/' . $name . '.db';
+		} else {
+			$host = $config->getValue('dbhost', '');
+			if (strpos($host, ':')) {
+				// Host variable may carry a port or socket.
+				list($host, $portOrSocket) = explode(':', $host, 2);
+				if (ctype_digit($portOrSocket)) {
+					$connectionParams['port'] = $portOrSocket;
+				} else {
+					$connectionParams['unix_socket'] = $portOrSocket;
+				}
+			}
+			$connectionParams['host'] = $host;
+			$connectionParams['dbname'] = $name;
+		}
+
+		$connectionParams['tablePrefix'] = $config->getValue('dbtableprefix', 'oc_');
+		$connectionParams['sqlite.journal_mode'] = $config->getValue('sqlite.journal_mode', 'WAL');
+
+		//additional driver options, eg. for mysql ssl
+		$driverOptions = $config->getValue('dbdriveroptions', null);
+		if ($driverOptions) {
+			$connectionParams['driverOptions'] = $driverOptions;
+		}
+
+		return $connectionParams;
 	}
 }

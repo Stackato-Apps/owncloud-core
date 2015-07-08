@@ -12,9 +12,6 @@
 						data-type="folder" data-newname="<?php p($l->t('New folder')) ?>">
 						<p><?php p($l->t('Folder'));?></p>
 					</li>
-					<li class="icon-link svg" data-type="web">
-						<p><?php p($l->t('From link'));?></p>
-					</li>
 				</ul>
 			</div>
 			<?php endif;?>
@@ -34,12 +31,17 @@
 						   value="(max <?php isset($_['uploadMaxHumanFilesize']) ? p($_['uploadMaxHumanFilesize']) : ''; ?>)">
 					<input type="file" id="file_upload_start" name='files[]'
 						   data-url="<?php print_unescaped(OCP\Util::linkTo('files', 'ajax/upload.php')); ?>" />
-					<a href="#" class="svg icon-upload"></a>
+					<label for="file_upload_start" class="svg icon-upload">
+						<span class="hidden-visually"><?php p($l->t('Upload'))?></span>
+					</label>
 			</div>
 			<div id="uploadprogresswrapper">
 				<div id="uploadprogressbar"></div>
-				<input type="button" class="stop icon-close"
-					style="display:none" value="" />
+				<button class="stop icon-close" style="display:none">
+					<span class="hidden-visually">
+						<?php p($l->t('Cancel upload'))?>
+					</span>
+				</button>
 			</div>
 		</div>
 		<div id="file_action_panel"></div>
@@ -49,7 +51,17 @@
 	<input type="hidden" name="permissions" value="" id="permissions">
 </div>
 
-<div id="emptycontent" class="hidden"><?php p($l->t('Nothing in here. Upload something!'))?></div>
+<div id="emptycontent" class="hidden">
+	<div class="icon-folder"></div>
+	<h2><?php p($l->t('No files in here')); ?></h2>
+	<p class="uploadmessage hidden"><?php p($l->t('Upload some content or sync with your devices!')); ?></p>
+</div>
+
+<div class="nofilterresults emptycontent hidden">
+	<div class="icon-search"></div>
+	<h2><?php p($l->t('No entries found in this folder')); ?></h2>
+	<p></p>
+</div>
 
 <table id="filestable" data-allow-public-upload="<?php p($_['publicUploadEnabled'])?>" data-preview-x="36" data-preview-y="36">
 	<thead>
@@ -57,11 +69,13 @@
 			<th id='headerName' class="hidden column-name">
 				<div id="headerName-container">
 					<input type="checkbox" id="select_all_files" class="select-all"/>
-					<label for="select_all_files"></label>
+					<label for="select_all_files">
+						<span class="hidden-visually"><?php p($l->t('Select all'))?></span>
+					</label>
 					<a class="name sort columntitle" data-sort="name"><span><?php p($l->t( 'Name' )); ?></span><span class="sort-indicator"></span></a>
 					<span id="selectedActionsList" class="selectedActions">
 						<a href="" class="download">
-							<img class="svg" alt="Download"
+							<img class="svg" alt=""
 								 src="<?php print_unescaped(OCP\image_path("core", "actions/download.svg")); ?>" />
 							<?php p($l->t('Download'))?>
 						</a>
@@ -75,7 +89,7 @@
 				<a id="modified" class="columntitle" data-sort="mtime"><span><?php p($l->t( 'Modified' )); ?></span><span class="sort-indicator"></span></a>
 					<span class="selectedActions"><a href="" class="delete-selected">
 						<?php p($l->t('Delete'))?>
-						<img class="svg" alt="<?php p($l->t('Delete'))?>"
+						<img class="svg" alt=""
 							 src="<?php print_unescaped(OCP\image_path("core", "actions/delete.svg")); ?>" />
 					</a></span>
 			</th>

@@ -6,7 +6,7 @@
  * See the COPYING-README file.
  */
 
-class Test_Config extends PHPUnit_Framework_TestCase {
+class Test_Config extends \Test\TestCase {
 	const TESTCONTENT = '<?php $CONFIG=array("foo"=>"bar", "beers" => array("Appenzeller", "Guinness", "Kölsch"), "alcohol_free" => false);';
 
 	/** @var array */
@@ -18,15 +18,18 @@ class Test_Config extends PHPUnit_Framework_TestCase {
 	/** @var string */
 	private $randomTmpDir;
 
-	function setUp() {
+	protected function setUp() {
+		parent::setUp();
+
 		$this->randomTmpDir = \OC_Helper::tmpFolder();
 		$this->configFile = $this->randomTmpDir.'testconfig.php';
 		file_put_contents($this->configFile, self::TESTCONTENT);
 		$this->config = new OC\Config($this->randomTmpDir, 'testconfig.php');
 	}
 
-	public function tearDown() {
+	protected function tearDown() {
 		unlink($this->configFile);
+		parent::tearDown();
 	}
 
 	public function testGetKeys() {
@@ -44,7 +47,6 @@ class Test_Config extends PHPUnit_Framework_TestCase {
 	}
 
 	public function testSetValue() {
-		$this->config->setDebugMode(false);
 		$this->config->setValue('foo', 'moo');
 		$expectedConfig = $this->initialConfig;
 		$expectedConfig['foo'] = 'moo';
@@ -69,8 +71,37 @@ class Test_Config extends PHPUnit_Framework_TestCase {
 		$this->assertEquals($expected, $content);
 	}
 
+	public function testSetValues() {
+		$content = file_get_contents($this->configFile);
+		$this->assertEquals(self::TESTCONTENT, $content);
+
+		// Changing configs to existing values and deleting non-existing once
+		// should not rewrite the config.php
+		$this->config->setValues([
+			'foo'			=> 'bar',
+			'not_exists'	=> null,
+		]);
+
+		$this->assertAttributeEquals($this->initialConfig, 'cache', $this->config);
+		$content = file_get_contents($this->configFile);
+		$this->assertEquals(self::TESTCONTENT, $content);
+
+		$this->config->setValues([
+			'foo'			=> 'moo',
+			'alcohol_free'	=> null,
+		]);
+		$expectedConfig = $this->initialConfig;
+		$expectedConfig['foo'] = 'moo';
+		unset($expectedConfig['alcohol_free']);
+		$this->assertAttributeEquals($expectedConfig, 'cache', $this->config);
+
+		$content = file_get_contents($this->configFile);
+		$expected = "<?php\n\$CONFIG = array (\n  'foo' => 'moo',\n  'beers' => \n  array (\n    0 => 'Appenzeller',\n  " .
+			"  1 => 'Guinness',\n    2 => 'Kölsch',\n  ),\n);\n";
+		$this->assertEquals($expected, $content);
+	}
+
 	public function testDeleteKey() {
-		$this->config->setDebugMode(false);
 		$this->config->deleteKey('foo');
 		$expectedConfig = $this->initialConfig;
 		unset($expectedConfig['foo']);
@@ -80,38 +111,6 @@ class Test_Config extends PHPUnit_Framework_TestCase {
 		$expected = "<?php\n\$CONFIG = array (\n  'beers' => \n  array (\n    0 => 'Appenzeller',\n  " .
 			"  1 => 'Guinness',\n    2 => 'Kölsch',\n  ),\n  'alcohol_free' => false,\n);\n";
 		$this->assertEquals($expected, $content);
-	}
-
-	public function testSetDebugMode() {
-		$this->config->setDebugMode(true);
-		$this->assertAttributeEquals($this->initialConfig, 'cache', $this->config);
-		$this->assertAttributeEquals(true, 'debugMode', $this->config);
-		$content = file_get_contents($this->configFile);
-		$expected = "<?php\ndefine('DEBUG',true);\n\$CONFIG = array (\n  'foo' => 'bar',\n  'beers' => \n  array (\n    0 => 'Appenzeller',\n  " .
-			"  1 => 'Guinness',\n    2 => 'Kölsch',\n  ),\n  'alcohol_free' => false,\n);\n";
-		$this->assertEquals($expected, $content);
-
-		$this->config->setDebugMode(false);
-		$this->assertAttributeEquals($this->initialConfig, 'cache', $this->config);
-		$this->assertAttributeEquals(false, 'debugMode', $this->config);
-		$content = file_get_contents($this->configFile);
-		$expected = "<?php\n\$CONFIG = array (\n  'foo' => 'bar',\n  'beers' => \n  array (\n    0 => 'Appenzeller',\n  " .
-			"  1 => 'Guinness',\n    2 => 'Kölsch',\n  ),\n  'alcohol_free' => false,\n);\n";
-		$this->assertEquals($expected, $content);
-	}
-
-
-	public function testIsDebugMode() {
-		// Default
-		$this->assertFalse($this->config->isDebugMode());
-
-		// Manually set to false
-		$this->config->setDebugMode(false);
-		$this->assertFalse($this->config->isDebugMode());
-
-		// Manually set to true
-		$this->config->setDebugMode(true);
-		$this->assertTrue($this->config->isDebugMode());
 	}
 
 	public function testConfigMerge() {

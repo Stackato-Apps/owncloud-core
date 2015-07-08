@@ -1,22 +1,35 @@
 <?php
 /**
- * ownCloud
+ * @author Arthur Schiwon <blizzz@owncloud.com>
+ * @author Bart Visscher <bartv@thisnet.nl>
+ * @author Björn Schießle <schiessle@owncloud.com>
+ * @author Georg Ehrke <georg@owncloud.com>
+ * @author goodkiller <markopraakli@gmail.com>
+ * @author Jakob Sack <mail@jakobsack.de>
+ * @author Lukas Reschke <lukas@owncloud.com>
+ * @author macjohnny <estebanmarin@gmx.ch>
+ * @author Michael Gapczynski <GapczynskiM@gmail.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Qingping Hou <dave2008713@gmail.com>
+ * @author Robin Appelman <icewind@owncloud.com>
+ * @author Robin McCorkell <rmccorkell@karoshi.org.uk>
+ * @author Scrutinizer Auto-Fixer <auto-fixer@scrutinizer-ci.com>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
  *
- * @author Frank Karlitschek
- * @copyright 2012 Frank Karlitschek frank@owncloud.org
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE
- * License as published by the Free Software Foundation; either
- * version 3 of the License, or any later version.
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
  *
- * This library is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU AFFERO GENERAL PUBLIC LICENSE for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU Affero General Public
- * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
  *
  */
 
@@ -37,6 +50,7 @@ class OC_Group {
 
 	/**
 	 * @return \OC\Group\Manager
+	 * @deprecated Use \OC::$server->getGroupManager();
 	 */
 	public static function getManager() {
 		return \OC::$server->getGroupManager();
@@ -44,6 +58,7 @@ class OC_Group {
 
 	/**
 	 * @return \OC\User\Manager
+	 * @deprecated Use \OC::$server->getUserManager()
 	 */
 	private static function getUserManager() {
 		return \OC::$server->getUserManager();
@@ -73,12 +88,10 @@ class OC_Group {
 	 *
 	 * Tries to create a new group. If the group name already exists, false will
 	 * be returned. Basic checking of Group name
+	 * @deprecated Use \OC::$server->getGroupManager()->createGroup() instead
 	 */
 	public static function createGroup($gid) {
-		OC_Hook::emit("OC_Group", "pre_createGroup", array("run" => true, "gid" => $gid));
-
 		if (self::getManager()->createGroup($gid)) {
-			OC_Hook::emit("OC_User", "post_createGroup", array("gid" => $gid));
 			return true;
 		} else {
 			return false;
@@ -91,19 +104,12 @@ class OC_Group {
 	 * @return bool
 	 *
 	 * Deletes a group and removes it from the group_user-table
+	 * @deprecated Use \OC::$server->getGroupManager()->delete() instead
 	 */
 	public static function deleteGroup($gid) {
-		// Prevent users from deleting group admin
-		if ($gid == "admin") {
-			return false;
-		}
-
-		OC_Hook::emit("OC_Group", "pre_deleteGroup", array("run" => true, "gid" => $gid));
-
 		$group = self::getManager()->get($gid);
 		if ($group) {
 			if ($group->delete()) {
-				OC_Hook::emit("OC_User", "post_deleteGroup", array("gid" => $gid));
 				return true;
 			}
 		}
@@ -117,6 +123,7 @@ class OC_Group {
 	 * @return bool
 	 *
 	 * Checks whether the user is member of a group or not.
+	 * @deprecated Use \OC::$server->getGroupManager->inGroup($user);
 	 */
 	public static function inGroup($uid, $gid) {
 		$group = self::getManager()->get($gid);
@@ -134,14 +141,13 @@ class OC_Group {
 	 * @return bool
 	 *
 	 * Adds a user to a group.
+	 * @deprecated Use \OC::$server->getGroupManager->addUser();
 	 */
 	public static function addToGroup($uid, $gid) {
 		$group = self::getManager()->get($gid);
 		$user = self::getUserManager()->get($uid);
 		if ($group and $user) {
-			OC_Hook::emit("OC_Group", "pre_addToGroup", array("run" => true, "uid" => $uid, "gid" => $gid));
 			$group->addUser($user);
-			OC_Hook::emit("OC_User", "post_addToGroup", array("uid" => $uid, "gid" => $gid));
 			return true;
 		} else {
 			return false;
@@ -176,6 +182,7 @@ class OC_Group {
 	 *
 	 * This function fetches all groups a user belongs to. It does not check
 	 * if the user exists at all.
+	 * @deprecated Use \OC::$server->getGroupManager->getuserGroupIds($user)
 	 */
 	public static function getUserGroups($uid) {
 		$user = self::getUserManager()->get($uid);
@@ -209,6 +216,7 @@ class OC_Group {
 	 *
 	 * @param string $gid
 	 * @return bool
+	 * @deprecated Use \OC::$server->getGroupManager->groupExists($gid)
 	 */
 	public static function groupExists($gid) {
 		return self::getManager()->groupExists($gid);
@@ -260,6 +268,7 @@ class OC_Group {
 	 * @param int $limit
 	 * @param int $offset
 	 * @return array an array of display names (value) and user ids(key)
+	 * @deprecated Use \OC::$server->getGroupManager->displayNamesInGroup($gid, $search, $limit, $offset)
 	 */
 	public static function displayNamesInGroup($gid, $search = '', $limit = -1, $offset = 0) {
 		return self::getManager()->displayNamesInGroup($gid, $search, $limit, $offset);
@@ -282,7 +291,8 @@ class OC_Group {
 				$displayNames
 			);
 			if ($diff) {
-				$displayNames = array_merge($diff, $displayNames);
+				// A fix for LDAP users. array_merge loses keys...
+				$displayNames = $diff + $displayNames;
 			}
 		}
 		return $displayNames;

@@ -1,4 +1,4 @@
-<form id="files_external" class="section">
+<form id="files_external" class="section" data-encryption-enabled="<?php echo $_['encryptionEnabled']?'true': 'false'; ?>">
 	<h2><?php p($l->t('External Storage')); ?></h2>
 	<?php if (isset($_['dependencies']) and ($_['dependencies']<>'')) print_unescaped(''.$_['dependencies'].''); ?>
 	<table id="externalStorage" class="grid" data-admin='<?php print_unescaped(json_encode($_['isAdminPage'])); ?>'>
@@ -10,16 +10,15 @@
 				<th><?php p($l->t('Configuration')); ?></th>
 				<?php if ($_['isAdminPage']) print_unescaped('<th>'.$l->t('Available for').'</th>'); ?>
 				<th>&nbsp;</th>
+				<th>&nbsp;</th>
 			</tr>
 		</thead>
 		<tbody>
-		<?php $_['mounts'] = array_merge($_['mounts'], array('' => array())); ?>
+		<?php $_['mounts'] = array_merge($_['mounts'], array('' => array('id' => ''))); ?>
 		<?php foreach ($_['mounts'] as $mount): ?>
-			<tr <?php print_unescaped(isset($mount['mountpoint']) ? 'class="'.OC_Util::sanitizeHTML($mount['class']).'"' : 'id="addMountPoint"'); ?>>
+			<tr <?php print_unescaped(isset($mount['mountpoint']) ? 'class="'.OC_Util::sanitizeHTML($mount['class']).'"' : 'id="addMountPoint"'); ?> data-id="<?php p($mount['id']) ?>">
 				<td class="status">
-				<?php if (isset($mount['status'])): ?>
-					<span class="<?php p(($mount['status']) ? 'success' : 'error'); ?>"></span>
-				<?php endif; ?>
+					<span></span>
 				</td>
 				<td class="mountPoint"><input type="text" name="mountPoint"
 											  value="<?php p(isset($mount['mountpoint']) ? $mount['mountpoint'] : ''); ?>"
@@ -28,7 +27,7 @@
 				</td>
 				<?php if (!isset($mount['mountpoint'])): ?>
 					<td class="backend">
-						<select id="selectBackend" data-configurations='<?php p(json_encode($_['backends'])); ?>'>
+						<select id="selectBackend" class="selectBackend" data-configurations='<?php p(json_encode($_['backends'])); ?>'>
 							<option value="" disabled selected
 									style="display:none;"><?php p($l->t('Add storage')); ?></option>
 							<?php foreach ($_['backends'] as $class => $backend): ?>
@@ -76,7 +75,7 @@
 								<?php endif; ?>
 							<?php endif; ?>
 						<?php endforeach; ?>
-						<?php if (isset($_['backends'][$mount['class']]['custom']) && !in_array('files_external/js/'.$_['backends'][$mount['class']]['custom'], \OC_Util::$scripts)): ?>
+						<?php if (isset($_['backends'][$mount['class']]['custom'])): ?>
 							<?php OCP\Util::addScript('files_external', $_['backends'][$mount['class']]['custom']); ?>
 						<?php endif; ?>
 					<?php endif; ?>
@@ -91,8 +90,21 @@
 					<input type="hidden" class="applicableUsers" style="width:20em;" value=""/>
 				</td>
 				<?php endif; ?>
+				<td class="mountOptionsToggle <?php if (!isset($mount['mountpoint'])) { p('hidden'); } ?>"
+					><img
+						class="svg action"
+						title="<?php p($l->t('Advanced settings')); ?>"
+						alt="<?php p($l->t('Advanced settings')); ?>"
+						src="<?php print_unescaped(image_path('core', 'actions/settings.svg')); ?>" />
+					<input type="hidden" class="mountOptions" value="<?php isset($mount['mountOptions']) ? p(json_encode($mount['mountOptions'])) : '' ?>" />
+					<?php if ($_['isAdminPage']): ?>
+					<?php if (isset($mount['priority'])): ?>
+					<input type="hidden" class="priority" value="<?php p($mount['priority']) ?>" />
+					<?php endif; ?>
+					<?php endif; ?>
+				</td>
 				<td <?php if (isset($mount['mountpoint'])): ?>class="remove"
-					<?php else: ?>style="visibility:hidden;"
+					<?php else: ?>class="hidden"
 					<?php endif ?>><img alt="<?php p($l->t('Delete')); ?>"
 										title="<?php p($l->t('Delete')); ?>"
 										class="svg action"
@@ -119,30 +131,3 @@
 		</p>
 	<?php endif; ?>
 </form>
-
-<?php if ( ! $_['isAdminPage']):  ?>
-<form id="files_external" class="section"
-	  method="post"
-	  enctype="multipart/form-data"
-	  action="<?php p(OCP\Util::linkTo('files_external', 'ajax/addRootCertificate.php')); ?>">
-		<h2><?php p($l->t('SSL root certificates'));?></h2>
-		<table id="sslCertificate" data-admin='<?php print_unescaped(json_encode($_['isAdminPage'])); ?>'>
-			<tbody>
-			<?php foreach ($_['certs'] as $rootCert): ?>
-			<tr id="<?php p($rootCert) ?>">
-			<td class="rootCert"><?php p($rootCert) ?></td>
-			<td <?php if ($rootCert != ''): ?>class="remove"
-				<?php else: ?>style="visibility:hidden;"
-				<?php endif; ?>><img alt="<?php p($l->t('Delete')); ?>"
-									 title="<?php p($l->t('Delete')); ?>"
-									 class="svg action"
-									 src="<?php print_unescaped(image_path('core', 'actions/delete.svg')); ?>" /></td>
-			</tr>
-			<?php endforeach; ?>
-			</tbody>
-		</table>
-		<input type="hidden" name="requesttoken" value="<?php p($_['requesttoken']); ?>">
-		<input type="file" id="rootcert_import" name="rootcert_import">
-		<input type="submit" name="cert_import" value="<?php p($l->t('Import Root Certificate')); ?>" />
-</form>
-<?php endif; ?>

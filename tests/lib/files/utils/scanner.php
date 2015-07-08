@@ -9,17 +9,17 @@
 namespace Test\Files\Utils;
 
 use OC\Files\Filesystem;
-use OC\Files\Mount\Mount;
+use OC\Files\Mount\MountPoint;
 use OC\Files\Storage\Temporary;
 
 class TestScanner extends \OC\Files\Utils\Scanner {
 	/**
-	 * @var \OC\Files\Mount\Mount[] $mounts
+	 * @var \OC\Files\Mount\MountPoint[] $mounts
 	 */
 	private $mounts = array();
 
 	/**
-	 * @param \OC\Files\Mount\Mount $mount
+	 * @param \OC\Files\Mount\MountPoint $mount
 	 */
 	public function addMount($mount) {
 		$this->mounts[] = $mount;
@@ -38,26 +38,21 @@ class TestScanner extends \OC\Files\Utils\Scanner {
 	}
 }
 
-
 class Scanner extends \Test\TestCase {
-	/** @var \OC\Files\Storage\Storage */
-	private $originalStorage;
-
 	protected function setUp() {
 		parent::setUp();
 
-		$this->originalStorage = \OC\Files\Filesystem::getStorage('/');
+		$this->loginAsUser();
 	}
 
 	protected function tearDown() {
-		\OC\Files\Filesystem::mount($this->originalStorage, array(), '/');
-
+		$this->logout();
 		parent::tearDown();
 	}
 
 	public function testReuseExistingRoot() {
 		$storage = new Temporary(array());
-		$mount = new Mount($storage, '');
+		$mount = new MountPoint($storage, '');
 		Filesystem::getMountManager()->addMount($mount);
 		$cache = $storage->getCache();
 
@@ -65,7 +60,7 @@ class Scanner extends \Test\TestCase {
 		$storage->file_put_contents('foo.txt', 'qwerty');
 		$storage->file_put_contents('folder/bar.txt', 'qwerty');
 
-		$scanner = new TestScanner('');
+		$scanner = new TestScanner('', \OC::$server->getDatabaseConnection());
 		$scanner->addMount($mount);
 
 		$scanner->scan('');
@@ -79,7 +74,7 @@ class Scanner extends \Test\TestCase {
 
 	public function testReuseExistingFile() {
 		$storage = new Temporary(array());
-		$mount = new Mount($storage, '');
+		$mount = new MountPoint($storage, '');
 		Filesystem::getMountManager()->addMount($mount);
 		$cache = $storage->getCache();
 
@@ -87,7 +82,7 @@ class Scanner extends \Test\TestCase {
 		$storage->file_put_contents('foo.txt', 'qwerty');
 		$storage->file_put_contents('folder/bar.txt', 'qwerty');
 
-		$scanner = new TestScanner('');
+		$scanner = new TestScanner('', \OC::$server->getDatabaseConnection());
 		$scanner->addMount($mount);
 
 		$scanner->scan('');
@@ -106,7 +101,7 @@ class Scanner extends \Test\TestCase {
 		$propagator = $this->getMock('\OC\Files\Cache\ChangePropagator', array('propagateChanges'), array(), '', false);
 
 		$storage = new Temporary(array());
-		$mount = new Mount($storage, '/foo');
+		$mount = new MountPoint($storage, '/foo');
 		Filesystem::getMountManager()->addMount($mount);
 		$cache = $storage->getCache();
 
@@ -114,7 +109,7 @@ class Scanner extends \Test\TestCase {
 		$storage->file_put_contents('foo.txt', 'qwerty');
 		$storage->file_put_contents('folder/bar.txt', 'qwerty');
 
-		$scanner = new TestScanner('');
+		$scanner = new TestScanner('', \OC::$server->getDatabaseConnection());
 		$originalPropagator = $scanner->getPropagator();
 		$scanner->setPropagator($propagator);
 		$scanner->addMount($mount);

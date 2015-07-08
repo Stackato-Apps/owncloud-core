@@ -1,9 +1,23 @@
 <?php
 /**
- * Copyright (c) 2014 Arthur Schiwon <blizzz@owncloud.com>
- * This file is licensed under the Affero General Public License version 3 or
- * later.
- * See the COPYING-README file.
+ * @author Arthur Schiwon <blizzz@owncloud.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
  */
 
 namespace OCA\user_ldap\Command;
@@ -15,8 +29,9 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 use OCA\user_ldap\lib\user\User;
-use OCA\User_LDAP\lib\user\Manager;
-use OCA\user_ldap\lib\Helper;
+use OCA\User_LDAP\lib\User\DeletedUsersIndex;
+use OCA\User_LDAP\Mapping\UserMapping;
+use OCA\user_ldap\lib\Helper as LDAPHelper;
 use OCA\user_ldap\User_Proxy;
 
 class CheckUser extends Command {
@@ -26,18 +41,23 @@ class CheckUser extends Command {
 	/** @var \OCA\User_LDAP\lib\Helper */
 	protected $helper;
 
-	/** @var \OCP\IConfig */
-	protected $config;
+	/** @var \OCA\User_LDAP\lib\User\DeletedUsersIndex */
+	protected $dui;
+
+	/** @var \OCA\User_LDAP\Mapping\UserMapping */
+	protected $mapping;
 
 	/**
 	 * @param OCA\user_ldap\User_Proxy $uBackend
-	 * @param OCA\User_LDAP\lib\Helper $helper
-	 * @param OCP\IConfig $config
+	 * @param OCA\user_ldap\lib\Helper $helper
+	 * @param OCA\User_LDAP\lib\User\DeletedUsersIndex $dui
+	 * @param OCA\User_LDAP\Mapping\UserMapping $mapping
 	 */
-	public function __construct(User_Proxy $uBackend, Helper $helper, \OCP\IConfig $config) {
+	public function __construct(User_Proxy $uBackend, LDAPHelper $helper, DeletedUsersIndex $dui, UserMapping $mapping) {
 		$this->backend = $uBackend;
 		$this->helper = $helper;
-		$this->config = $config;
+		$this->dui = $dui;
+		$this->mapping = $mapping;
 		parent::__construct();
 	}
 
@@ -70,10 +90,7 @@ class CheckUser extends Command {
 				return;
 			}
 
-			// TODO FIXME consolidate next line in DeletedUsersIndex
-			// (impractical now, because of class dependencies)
-			$this->config->setUserValue($uid, 'user_ldap', 'isDeleted', '1');
-
+			$this->dui->markUser($uid);
 			$output->writeln('The user does not exists on LDAP anymore.');
 			$output->writeln('Clean up the user\'s remnants by: ./occ user:delete "'
 				. $uid . '"');
@@ -86,22 +103,11 @@ class CheckUser extends Command {
 	 * checks whether a user is actually mapped
 	 * @param string $ocName the username as used in ownCloud
 	 * @throws \Exception
-	 * @return bool
+	 * @return true
 	 */
 	protected function confirmUserIsMapped($ocName) {
-		//TODO FIXME this should go to Mappings in OC 8
-		$db = \OC::$server->getDatabaseConnection();
-		$query = $db->prepare('
-			SELECT
-				`ldap_dn` AS `dn`
-			FROM `*PREFIX*ldap_user_mapping`
-			WHERE `owncloud_name` = ?'
-		);
-
-		$query->execute(array($ocName));
-		$result = $query->fetchColumn();
-
-		if($result === false) {
+		$dn = $this->mapping->getDNByName($ocName);
+		if ($dn === false) {
 			throw new \Exception('The given user is not a recognized LDAP user.');
 		}
 
@@ -109,13 +115,13 @@ class CheckUser extends Command {
 	}
 
 	/**
-	 * checks whether the setup allows reliable checking of LDAP user existance
+	 * checks whether the setup allows reliable checking of LDAP user existence
 	 * @throws \Exception
-	 * @return bool
+	 * @return true
 	 */
 	protected function isAllowed($force) {
 		if($this->helper->haveDisabledConfigurations() && !$force) {
-			throw new \Exception('Cannot check user existance, because '
+			throw new \Exception('Cannot check user existence, because '
 				. 'disabled LDAP configurations are present.');
 		}
 

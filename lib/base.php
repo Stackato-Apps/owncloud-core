@@ -1,22 +1,52 @@
 <?php
 /**
- * ownCloud
+ * @author Adam Williamson <awilliam@redhat.com>
+ * @author Andreas Fischer <bantu@owncloud.com>
+ * @author Arthur Schiwon <blizzz@owncloud.com>
+ * @author Bart Visscher <bartv@thisnet.nl>
+ * @author Bernhard Posselt <dev@bernhard-posselt.com>
+ * @author Björn Schießle <schiessle@owncloud.com>
+ * @author Christopher Schäpers <kondou@ts.unde.re>
+ * @author davidgumberg <davidnoizgumberg@gmail.com>
+ * @author Florian Scholz <FlorianScholz@bgstyle.de>
+ * @author Florin Peter <github@florin-peter.de>
+ * @author Frank Karlitschek <frank@owncloud.org>
+ * @author Georg Ehrke <georg@owncloud.com>
+ * @author Hugo Gonzalez Labrador <hglavra@gmail.com>
+ * @author Jakob Sack <mail@jakobsack.de>
+ * @author Jan-Christoph Borchardt <hey@jancborchardt.net>
+ * @author Joas Schilling <nickvergessen@owncloud.com>
+ * @author Jörn Friedrich Dreyer <jfd@butonic.de>
+ * @author Lukas Reschke <lukas@owncloud.com>
+ * @author marc0s <marcos@tenak.net>
+ * @author Michael Gapczynski <GapczynskiM@gmail.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Owen Winkler <a_github@midnightcircus.com>
+ * @author Ramiro Aparicio <rapariciog@gmail.com>
+ * @author Robin Appelman <icewind@owncloud.com>
+ * @author Robin McCorkell <rmccorkell@karoshi.org.uk>
+ * @author scolebrook <scolebrook@mac.com>
+ * @author Stefan Herbrechtsmeier <stefan@herbrechtsmeier.net>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
+ * @author Thomas Tanghus <thomas@tanghus.net>
+ * @author Victor Dubiniuk <dubiniuk@owncloud.com>
+ * @author Vincent Petry <pvince81@owncloud.com>
+ * @author Volkan Gezer <volkangezer@gmail.com>
  *
- * @author Frank Karlitschek
- * @copyright 2012 Frank Karlitschek frank@owncloud.org
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE
- * License as published by the Free Software Foundation; either
- * version 3 of the License, or any later version.
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
  *
- * This library is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU AFFERO GENERAL PUBLIC LICENSE for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU Affero General Public
- * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
  *
  */
 
@@ -66,14 +96,9 @@ class OC {
 	public static $REQUESTEDAPP = '';
 
 	/**
-	 * check if owncloud runs in cli mode
+	 * check if ownCloud runs in cli mode
 	 */
 	public static $CLI = false;
-
-	/**
-	 * @var \OC\Session\Session
-	 */
-	public static $session = null;
 
 	/**
 	 * @var \OC\Autoloader $loader
@@ -85,6 +110,10 @@ class OC {
 	 */
 	public static $server = null;
 
+	/**
+	 * @throws \RuntimeException when the 3rdparty directory is missing or
+	 * the app path list is empty or contains an invalid path
+	 */
 	public static function initPaths() {
 		// calculate the root directories
 		OC::$SERVERROOT = str_replace("\\", '/', substr(__DIR__, 0, -4));
@@ -105,7 +134,18 @@ class OC {
 		OC_Config::$object = new \OC\Config(self::$configDir);
 
 		OC::$SUBURI = str_replace("\\", "/", substr(realpath($_SERVER["SCRIPT_FILENAME"]), strlen(OC::$SERVERROOT)));
-		$scriptName = OC_Request::scriptName();
+		/**
+		 * FIXME: The following line is required because of a cyclic dependency
+		 *        on IRequest.
+		 */
+		$params = [
+			'server' => [
+				'SCRIPT_NAME' => $_SERVER['SCRIPT_NAME'],
+				'SCRIPT_FILENAME' => $_SERVER['SCRIPT_FILENAME'],
+			],
+		];
+		$fakeRequest = new \OC\AppFramework\Http\Request($params, null, new \OC\AllConfig(new \OC\SystemConfig()));
+		$scriptName = $fakeRequest->getScriptName();
 		if (substr($scriptName, -1) == '/') {
 			$scriptName .= 'index.php';
 			//make sure suburi follows the same rules as scriptName
@@ -117,35 +157,43 @@ class OC {
 			}
 		}
 
-		if (substr($scriptName, 0 - strlen(OC::$SUBURI)) === OC::$SUBURI) {
-			OC::$WEBROOT = substr($scriptName, 0, 0 - strlen(OC::$SUBURI));
-
-			if (OC::$WEBROOT != '' && OC::$WEBROOT[0] !== '/') {
-				OC::$WEBROOT = '/' . OC::$WEBROOT;
-			}
-		} else {
-			// The scriptName is not ending with OC::$SUBURI
-			// This most likely means that we are calling from CLI.
-			// However some cron jobs still need to generate
-			// a web URL, so we use overwritewebroot as a fallback.
+		if (OC::$CLI) {
 			OC::$WEBROOT = OC_Config::getValue('overwritewebroot', '');
+		} else {
+			if (substr($scriptName, 0 - strlen(OC::$SUBURI)) === OC::$SUBURI) {
+				OC::$WEBROOT = substr($scriptName, 0, 0 - strlen(OC::$SUBURI));
+
+				if (OC::$WEBROOT != '' && OC::$WEBROOT[0] !== '/') {
+					OC::$WEBROOT = '/' . OC::$WEBROOT;
+				}
+			} else {
+				// The scriptName is not ending with OC::$SUBURI
+				// This most likely means that we are calling from CLI.
+				// However some cron jobs still need to generate
+				// a web URL, so we use overwritewebroot as a fallback.
+				OC::$WEBROOT = OC_Config::getValue('overwritewebroot', '');
+			}
 		}
 
 		// search the 3rdparty folder
-		if (OC_Config::getValue('3rdpartyroot', '') <> '' and OC_Config::getValue('3rdpartyurl', '') <> '') {
-			OC::$THIRDPARTYROOT = OC_Config::getValue('3rdpartyroot', '');
-			OC::$THIRDPARTYWEBROOT = OC_Config::getValue('3rdpartyurl', '');
-		} elseif (file_exists(OC::$SERVERROOT . '/3rdparty')) {
-			OC::$THIRDPARTYROOT = OC::$SERVERROOT;
-			OC::$THIRDPARTYWEBROOT = OC::$WEBROOT;
-		} elseif (file_exists(OC::$SERVERROOT . '/../3rdparty')) {
-			OC::$THIRDPARTYWEBROOT = rtrim(dirname(OC::$WEBROOT), '/');
-			OC::$THIRDPARTYROOT = rtrim(dirname(OC::$SERVERROOT), '/');
-		} else {
-			throw new Exception('3rdparty directory not found! Please put the ownCloud 3rdparty'
+		OC::$THIRDPARTYROOT = OC_Config::getValue('3rdpartyroot', null);
+		OC::$THIRDPARTYWEBROOT = OC_Config::getValue('3rdpartyurl', null);
+
+		if (empty(OC::$THIRDPARTYROOT) && empty(OC::$THIRDPARTYWEBROOT)) {
+			if (file_exists(OC::$SERVERROOT . '/3rdparty')) {
+				OC::$THIRDPARTYROOT = OC::$SERVERROOT;
+				OC::$THIRDPARTYWEBROOT = OC::$WEBROOT;
+			} elseif (file_exists(OC::$SERVERROOT . '/../3rdparty')) {
+				OC::$THIRDPARTYWEBROOT = rtrim(dirname(OC::$WEBROOT), '/');
+				OC::$THIRDPARTYROOT = rtrim(dirname(OC::$SERVERROOT), '/');
+			}
+		}
+		if (empty(OC::$THIRDPARTYROOT) || !file_exists(OC::$THIRDPARTYROOT)) {
+			throw new \RuntimeException('3rdparty directory not found! Please put the ownCloud 3rdparty'
 				. ' folder in the ownCloud folder or the folder above.'
 				. ' You can also configure the location in the config.php file.');
 		}
+
 		// search the apps folder
 		$config_paths = OC_Config::getValue('apps_paths', array());
 		if (!empty($config_paths)) {
@@ -167,12 +215,17 @@ class OC {
 		}
 
 		if (empty(OC::$APPSROOTS)) {
-			throw new Exception('apps directory not found! Please put the ownCloud apps folder in the ownCloud folder'
+			throw new \RuntimeException('apps directory not found! Please put the ownCloud apps folder in the ownCloud folder'
 				. ' or the folder above. You can also configure the location in the config.php file.');
 		}
 		$paths = array();
 		foreach (OC::$APPSROOTS as $path) {
 			$paths[] = $path['path'];
+			if (!is_dir($path['path'])) {
+				throw new \RuntimeException(sprintf('App directory "%s" not found! Please put the ownCloud apps folder in the'
+					. ' ownCloud folder or the folder above. You can also configure the location in the'
+					. ' config.php file.', $path['path']));
+			}
 		}
 
 		// set the right include path
@@ -187,7 +240,7 @@ class OC {
 	}
 
 	public static function checkConfig() {
-		$l = OC_L10N::get('lib');
+		$l = \OC::$server->getL10N('lib');
 
 		// Create config in case it does not already exists
 		$configFilePath = self::$configDir .'/config.php';
@@ -217,37 +270,24 @@ class OC {
 	}
 
 	public static function checkInstalled() {
+		if (defined('OC_CONSOLE')) {
+			return;
+		}
 		// Redirect to installer if not installed
-		if (!OC_Config::getValue('installed', false) && OC::$SUBURI != '/index.php') {
-			if (!OC::$CLI) {
+		if (!\OC::$server->getSystemConfig()->getValue('installed', false) && OC::$SUBURI != '/index.php') {
+			if (OC::$CLI) {
+				throw new Exception('Not installed');
+			} else {
 				$url = 'http://' . $_SERVER['SERVER_NAME'] . OC::$WEBROOT . '/index.php';
-				header("Location: $url");
+				header('Location: ' . $url);
 			}
 			exit();
 		}
 	}
 
-	public static function checkSSL() {
-		// redirect to https site if configured
-		if (OC_Config::getValue("forcessl", false)) {
-			header('Strict-Transport-Security: max-age=31536000');
-			ini_set("session.cookie_secure", "on");
-			if (OC_Request::serverProtocol() <> 'https' and !OC::$CLI) {
-				$url = "https://" . OC_Request::serverHost() . OC_Request::requestUri();
-				header("Location: $url");
-				exit();
-			}
-		} else {
-			// Invalidate HSTS headers
-			if (OC_Request::serverProtocol() === 'https') {
-				header('Strict-Transport-Security: max-age=0');
-			}
-		}
-	}
-
 	public static function checkMaintenanceMode() {
 		// Allow ajax update script to execute without being stopped
-		if (OC_Config::getValue('maintenance', false) && OC::$SUBURI != '/core/ajax/update.php') {
+		if (\OC::$server->getSystemConfig()->getValue('maintenance', false) && OC::$SUBURI != '/core/ajax/update.php') {
 			// send http status 503
 			header('HTTP/1.1 503 Service Temporarily Unavailable');
 			header('Status: 503 Service Temporarily Unavailable');
@@ -255,13 +295,14 @@ class OC {
 
 			// render error page
 			$template = new OC_Template('', 'update.user', 'guest');
+			OC_Util::addscript('maintenance-check');
 			$template->printPage();
 			die();
 		}
 	}
 
 	public static function checkSingleUserMode($lockIfNoUserLoggedIn = false) {
-		if (!\OCP\Config::getSystemValue('singleuser', false)) {
+		if (!\OC::$server->getSystemConfig()->getValue('singleuser', false)) {
 			return;
 		}
 		$user = OC_User::getUserSession()->getUser();
@@ -290,7 +331,7 @@ class OC {
 	 * check if the instance needs to preform an upgrade
 	 *
 	 * @return bool
-	 * @deprecated use \OCP\Util::needUpgrade instead
+	 * @deprecated use \OCP\Util::needUpgrade() instead
 	 */
 	public static function needUpgrade() {
 		return \OCP\Util::needUpgrade();
@@ -303,10 +344,11 @@ class OC {
 	 */
 	public static function checkUpgrade($showTemplate = true) {
 		if (\OCP\Util::needUpgrade()) {
-			if ($showTemplate && !OC_Config::getValue('maintenance', false)) {
+			$systemConfig = \OC::$server->getSystemConfig();
+			if ($showTemplate && !$systemConfig->getValue('maintenance', false)) {
 				$version = OC_Util::getVersion();
-				$oldTheme = OC_Config::getValue('theme');
-				OC_Config::setValue('theme', '');
+				$oldTheme = $systemConfig->getValue('theme');
+				$systemConfig->setValue('theme', '');
 				OC_Util::addScript('config'); // needed for web root
 				OC_Util::addScript('update');
 				$tmpl = new OC_Template('', 'update.admin', 'guest');
@@ -335,31 +377,41 @@ class OC {
 
 	public static function initTemplateEngine() {
 		// Add the stuff we need always
-		// TODO: read from core/js/core.json
-		OC_Util::addScript("jquery-1.10.0.min");
-		OC_Util::addScript("jquery-migrate-1.2.1.min");
-		OC_Util::addScript("jquery-ui-1.10.0.custom");
-		OC_Util::addScript("jquery-showpassword");
+		// following logic will import all vendor libraries that are
+		// specified in core/js/core.json
+		$fileContent = file_get_contents(OC::$SERVERROOT . '/core/js/core.json');
+		if($fileContent !== false) {
+			$coreDependencies = json_decode($fileContent, true);
+			foreach($coreDependencies['vendor'] as $vendorLibrary) {
+				// remove trailing ".js" as addVendorScript will append it
+				OC_Util::addVendorScript(
+					substr($vendorLibrary, 0, strlen($vendorLibrary) - 3));
+			}
+		} else {
+			throw new \Exception('Cannot read core/js/core.json');
+		}
+
 		OC_Util::addScript("placeholders");
 		OC_Util::addScript("jquery-tipsy");
 		OC_Util::addScript("compatibility");
-		OC_Util::addScript("underscore");
 		OC_Util::addScript("jquery.ocdialog");
 		OC_Util::addScript("oc-dialogs");
 		OC_Util::addScript("js");
+		OC_Util::addScript("l10n");
+		OC_Util::addTranslations("core");
 		OC_Util::addScript("octemplate");
 		OC_Util::addScript("eventsource");
 		OC_Util::addScript("config");
 		//OC_Util::addScript( "multiselect" );
-		OC_Util::addScript('search', 'result');
+		OC_Util::addScript('search', 'search');
 		OC_Util::addScript("oc-requesttoken");
 		OC_Util::addScript("apps");
-		OC_Util::addScript("snap");
+		OC_Util::addVendorScript('snapjs/dist/latest/snap');
 
 		// avatars
-		if (\OC_Config::getValue('enable_avatars', true) === true) {
+		if (\OC::$server->getSystemConfig()->getValue('enable_avatars', true) === true) {
 			\OC_Util::addScript('placeholder');
-			\OC_Util::addScript('3rdparty', 'md5/md5.min');
+			\OC_Util::addVendorScript('blueimp-md5/js/md5');
 			\OC_Util::addScript('jquery.avatar');
 			\OC_Util::addScript('avatar');
 		}
@@ -372,21 +424,19 @@ class OC {
 		OC_Util::addStyle("apps");
 		OC_Util::addStyle("fixes");
 		OC_Util::addStyle("multiselect");
-		OC_Util::addStyle("jquery-ui-1.10.0.custom");
+		OC_Util::addVendorStyle('jquery-ui/themes/base/jquery-ui');
+		OC_Util::addStyle('jquery-ui-fixes');
 		OC_Util::addStyle("jquery-tipsy");
 		OC_Util::addStyle("jquery.ocdialog");
 	}
 
 	public static function initSession() {
 		// prevents javascript from accessing php session cookies
-		ini_set('session.cookie_httponly', '1;');
+		ini_set('session.cookie_httponly', true);
 
 		// set the cookie path to the ownCloud directory
 		$cookie_path = OC::$WEBROOT ? : '/';
 		ini_set('session.cookie_path', $cookie_path);
-
-		//set the session object to a dummy session so code relying on the session existing still works
-		self::$session = new \OC\Session\Memory('');
 
 		// Let the session name be changed in the initSession Hook
 		$sessionName = OC_Util::getInstanceId();
@@ -394,13 +444,18 @@ class OC {
 		try {
 			// Allow session apps to create a custom session object
 			$useCustomSession = false;
-			OC_Hook::emit('OC', 'initSession', array('session' => &self::$session, 'sessionName' => &$sessionName, 'useCustomSession' => &$useCustomSession));
-			if(!$useCustomSession) {
+			$session = self::$server->getSession();
+			OC_Hook::emit('OC', 'initSession', array('session' => &$session, 'sessionName' => &$sessionName, 'useCustomSession' => &$useCustomSession));
+			if($useCustomSession) {
+				// use the session reference as the new Session
+				self::$server->setSession($session);
+			} else {
 				// set the session name to the instance id - which is unique
-				self::$session = new \OC\Session\Internal($sessionName);
+				self::$server->setSession(new \OC\Session\Internal($sessionName));
 			}
 			// if session cant be started break with http 500 error
 		} catch (Exception $e) {
+			\OCP\Util::logException('base', $e);
 			//show the user a detailed error page
 			OC_Response::setStatus(OC_Response::STATUS_INTERNAL_SERVER_ERROR);
 			OC_Template::printExceptionErrorPage($e);
@@ -408,15 +463,19 @@ class OC {
 
 		$sessionLifeTime = self::getSessionLifeTime();
 		// regenerate session id periodically to avoid session fixation
-		if (!self::$session->exists('SID_CREATED')) {
-			self::$session->set('SID_CREATED', time());
-		} else if (time() - self::$session->get('SID_CREATED') > $sessionLifeTime / 2) {
+		/**
+		 * @var \OCP\ISession $session
+		 */
+		$session = self::$server->getSession();
+		if (!$session->exists('SID_CREATED')) {
+			$session->set('SID_CREATED', time());
+		} else if (time() - $session->get('SID_CREATED') > $sessionLifeTime / 2) {
 			session_regenerate_id(true);
-			self::$session->set('SID_CREATED', time());
+			$session->set('SID_CREATED', time());
 		}
 
 		// session timeout
-		if (self::$session->exists('LAST_ACTIVITY') && (time() - self::$session->get('LAST_ACTIVITY') > $sessionLifeTime)) {
+		if ($session->exists('LAST_ACTIVITY') && (time() - $session->get('LAST_ACTIVITY') > $sessionLifeTime)) {
 			if (isset($_COOKIE[session_name()])) {
 				setcookie(session_name(), '', time() - 42000, $cookie_path);
 			}
@@ -425,14 +484,14 @@ class OC {
 			session_start();
 		}
 
-		self::$session->set('LAST_ACTIVITY', time());
+		$session->set('LAST_ACTIVITY', time());
 	}
 
 	/**
 	 * @return string
 	 */
 	private static function getSessionLifeTime() {
-		return OC_Config::getValue('session_lifetime', 60 * 60 * 24);
+		return \OC::$server->getConfig()->getSystemValue('session_lifetime', 60 * 60 * 24);
 	}
 
 	public static function loadAppClassPaths() {
@@ -444,37 +503,51 @@ class OC {
 		}
 	}
 
+	/**
+	 * Try to set some values to the required ownCloud default
+	 */
+	public static function setRequiredIniValues() {
+		@ini_set('default_charset', 'UTF-8');
+	}
 
 	public static function init() {
 		// register autoloader
+		$loaderStart = microtime(true);
 		require_once __DIR__ . '/autoloader.php';
 		self::$loader = new \OC\Autoloader();
-		self::$loader->registerPrefix('Doctrine\\Common', 'doctrine/common/lib');
-		self::$loader->registerPrefix('Doctrine\\DBAL', 'doctrine/dbal/lib');
-		self::$loader->registerPrefix('Symfony\\Component\\Routing', 'symfony/routing');
-		self::$loader->registerPrefix('Symfony\\Component\\Console', 'symfony/console');
-		self::$loader->registerPrefix('Patchwork', '3rdparty');
-		self::$loader->registerPrefix('Pimple', '3rdparty/Pimple');
 		spl_autoload_register(array(self::$loader, 'load'));
+		$loaderEnd = microtime(true);
 
-		// make a dummy session available as early as possible since error pages need it
-		self::$session = new \OC\Session\Memory('');
-
-		// set some stuff
-		//ob_start();
-		error_reporting(E_ALL | E_STRICT);
-		if (defined('DEBUG') && DEBUG) {
-			ini_set('display_errors', 1);
-		}
 		self::$CLI = (php_sapi_name() == 'cli');
 
-		date_default_timezone_set('UTC');
-		ini_set('arg_separator.output', '&amp;');
+		try {
+			self::initPaths();
+			// setup 3rdparty autoloader
+			$vendorAutoLoad = OC::$THIRDPARTYROOT . '/3rdparty/autoload.php';
+			if (!file_exists($vendorAutoLoad)) {
+				throw new \RuntimeException('Composer autoloader not found, unable to continue. Check the folder "3rdparty".');
+			}
+			require_once $vendorAutoLoad;
 
-		// try to switch magic quotes off.
-		if (get_magic_quotes_gpc() == 1) {
-			ini_set('magic_quotes_runtime', 0);
+		} catch (\RuntimeException $e) {
+			OC_Response::setStatus(OC_Response::STATUS_SERVICE_UNAVAILABLE);
+			// we can't use the template error page here, because this needs the
+			// DI container which isn't available yet
+			print($e->getMessage());
+			exit();
 		}
+
+		// setup the basic server
+		self::$server = new \OC\Server(\OC::$WEBROOT);
+		\OC::$server->getEventLogger()->log('autoloader', 'Autoloader', $loaderStart, $loaderEnd);
+		\OC::$server->getEventLogger()->start('boot', 'Initialize');
+
+		// Don't display errors and log them
+		error_reporting(E_ALL | E_STRICT);
+		@ini_set('display_errors', 0);
+		@ini_set('log_errors', 1);
+
+		date_default_timezone_set('UTC');
 
 		//try to configure php to enable big file uploads.
 		//this doesn´t work always depending on the webserver and php configuration.
@@ -490,17 +563,13 @@ class OC {
 		@ini_set('post_max_size', '10G');
 		@ini_set('file_uploads', '50');
 
+		self::setRequiredIniValues();
 		self::handleAuthHeaders();
-		self::initPaths();
 		self::registerAutoloaderCache();
 
+		// initialize intl fallback is necessary
+		\Patchwork\Utf8\Bootup::initIntl();
 		OC_Util::isSetLocaleWorking();
-
-		// setup 3rdparty autoloader
-		$vendorAutoLoad = OC::$THIRDPARTYROOT . '/3rdparty/autoload.php';
-		if (file_exists($vendorAutoLoad)) {
-			require_once $vendorAutoLoad;
-		}
 
 		if (!defined('PHPUNIT_RUN')) {
 			OC\Log\ErrorHandler::setLogger(OC_Log::$object);
@@ -519,42 +588,60 @@ class OC {
 		stream_wrapper_register('quota', 'OC\Files\Stream\Quota');
 		stream_wrapper_register('oc', 'OC\Files\Stream\OC');
 
-		// setup the basic server
-		self::$server = new \OC\Server();
-
-		self::initTemplateEngine();
+		\OC::$server->getEventLogger()->start('init_session', 'Initialize session');
 		OC_App::loadApps(array('session'));
 		if (!self::$CLI) {
 			self::initSession();
-		} else {
-			self::$session = new \OC\Session\Memory('');
 		}
+		\OC::$server->getEventLogger()->end('init_session');
+		self::initTemplateEngine();
 		self::checkConfig();
 		self::checkInstalled();
-		self::checkSSL();
-		OC_Response::addSecurityHeaders();
 
-		$errors = OC_Util::checkServer(\OC::$server->getConfig());
-		if (count($errors) > 0) {
-			if (self::$CLI) {
-				foreach ($errors as $error) {
-					echo $error['error'] . "\n";
-					echo $error['hint'] . "\n\n";
-				}
-			} else {
-				OC_Response::setStatus(OC_Response::STATUS_SERVICE_UNAVAILABLE);
-				OC_Template::printGuestPage('', 'error', array('errors' => $errors));
-			}
-			exit;
+		OC_Response::addSecurityHeaders();
+		if(self::$server->getRequest()->getServerProtocol() === 'https') {
+			ini_set('session.cookie_secure', true);
 		}
 
+		if (!defined('OC_CONSOLE')) {
+			$errors = OC_Util::checkServer(\OC::$server->getConfig());
+			if (count($errors) > 0) {
+				if (self::$CLI) {
+					// Convert l10n string into regular string for usage in database
+					$staticErrors = [];
+					foreach ($errors as $error) {
+						echo $error['error'] . "\n";
+						echo $error['hint'] . "\n\n";
+						$staticErrors[] = [
+							'error' => (string)$error['error'],
+							'hint' => (string)$error['hint'],
+						];
+					}
+
+					try {
+						\OC::$server->getConfig()->setAppValue('core', 'cronErrors', json_encode($staticErrors));
+					} catch (\Exception $e) {
+						echo('Writing to database failed');
+					}
+					exit(1);
+				} else {
+					OC_Response::setStatus(OC_Response::STATUS_SERVICE_UNAVAILABLE);
+					OC_Template::printGuestPage('', 'error', array('errors' => $errors));
+					exit;
+				}
+			} elseif (self::$CLI && \OC::$server->getConfig()->getSystemValue('installed', false)) {
+				\OC::$server->getConfig()->deleteAppValue('core', 'cronErrors');
+			}
+		}
 		//try to set the session lifetime
 		$sessionLifeTime = self::getSessionLifeTime();
 		@ini_set('gc_maxlifetime', (string)$sessionLifeTime);
 
+		$systemConfig = \OC::$server->getSystemConfig();
+
 		// User and Groups
-		if (!OC_Config::getValue("installed", false)) {
-			self::$session->set('user_id', '');
+		if (!$systemConfig->getValue("installed", false)) {
+			self::$server->getSession()->set('user_id', '');
 		}
 
 		OC_User::useBackend(new OC_User_Database());
@@ -567,37 +654,62 @@ class OC {
 
 		self::registerCacheHooks();
 		self::registerFilesystemHooks();
-		self::registerPreviewHooks();
+		if (\OC::$server->getSystemConfig()->getValue('enable_previews', true)) {
+			self::registerPreviewHooks();
+		}	
 		self::registerShareHooks();
 		self::registerLogRotate();
 		self::registerLocalAddressBook();
+		self::registerEncryptionWrapper();
+		self::registerEncryptionHooks();
 
 		//make sure temporary files are cleaned up
 		$tmpManager = \OC::$server->getTempManager();
 		register_shutdown_function(array($tmpManager, 'clean'));
+		$lockProvider = \OC::$server->getLockingProvider();
+		register_shutdown_function(array($lockProvider, 'releaseAll'));
 
-		if (OC_Config::getValue('installed', false) && !self::checkUpgrade(false)) {
-			if (OC_Appconfig::getValue('core', 'backgroundjobs_mode', 'ajax') == 'ajax') {
+		if ($systemConfig->getValue('installed', false) && !self::checkUpgrade(false)) {
+			if (\OC::$server->getConfig()->getAppValue('core', 'backgroundjobs_mode', 'ajax') == 'ajax') {
 				OC_Util::addScript('backgroundjobs');
 			}
 		}
 
-		$host = OC_Request::insecureServerHost();
-		// if the host passed in headers isn't trusted
+		// Check whether the sample configuration has been copied
+		if($systemConfig->getValue('copied_sample_config', false)) {
+			$l = \OC::$server->getL10N('lib');
+			header('HTTP/1.1 503 Service Temporarily Unavailable');
+			header('Status: 503 Service Temporarily Unavailable');
+			OC_Template::printErrorPage(
+				$l->t('Sample configuration detected'),
+				$l->t('It has been detected that the sample configuration has been copied. This can break your installation and is unsupported. Please read the documentation before performing changes on config.php')
+			);
+			return;
+		}
+
+		$request = \OC::$server->getRequest();
+		$host = $request->getInsecureServerHost();
+		/**
+		 * if the host passed in headers isn't trusted
+		 * FIXME: Should not be in here at all :see_no_evil:
+		 */
 		if (!OC::$CLI
-			// overwritehost is always trusted
-			&& OC_Request::getOverwriteHost() === null
-			&& !OC_Request::isTrustedDomain($host)
+			// overwritehost is always trusted, workaround to not have to make
+			// \OC\AppFramework\Http\Request::getOverwriteHost public
+			&& self::$server->getConfig()->getSystemValue('overwritehost') === ''
+			&& !\OC::$server->getTrustedDomainHelper()->isTrustedDomain($host)
+			&& self::$server->getConfig()->getSystemValue('installed', false)
 		) {
 			header('HTTP/1.1 400 Bad Request');
 			header('Status: 400 Bad Request');
 
 			$tmpl = new OCP\Template('core', 'untrustedDomain', 'guest');
-			$tmpl->assign('domain', $_SERVER['SERVER_NAME']);
+			$tmpl->assign('domain', $request->server['SERVER_NAME']);
 			$tmpl->printPage();
 
 			exit();
 		}
+		\OC::$server->getEventLogger()->end('boot');
 	}
 
 	private static function registerLocalAddressBook() {
@@ -612,12 +724,29 @@ class OC {
 	 * register hooks for the cache
 	 */
 	public static function registerCacheHooks() {
-		if (OC_Config::getValue('installed', false) && !\OCP\Util::needUpgrade()) { //don't try to do this before we are properly setup
-			\OCP\BackgroundJob::registerJob('OC\Cache\FileGlobalGC');
+		//don't try to do this before we are properly setup
+		if (\OC::$server->getSystemConfig()->getValue('installed', false) && !\OCP\Util::needUpgrade()) {
 
 			// NOTE: This will be replaced to use OCP
-			$userSession = \OC_User::getUserSession();
-			$userSession->listen('postLogin', '\OC\Cache\File', 'loginListener');
+			$userSession = self::$server->getUserSession();
+			$userSession->listen('\OC\User', 'postLogin', function () {
+				$cache = new \OC\Cache\File();
+				$cache->gc();
+			});
+		}
+	}
+
+	private static function registerEncryptionWrapper() {
+		\OCP\Util::connectHook('OC_Filesystem', 'preSetup', 'OC\Encryption\Manager', 'setupStorage');
+	}
+
+	private static function registerEncryptionHooks() {
+		$enabled = self::$server->getEncryptionManager()->isEnabled();
+		if ($enabled) {
+			\OCP\Util::connectHook('OCP\Share', 'post_shared', 'OC\Encryption\HookManager', 'postShared');
+			\OCP\Util::connectHook('OCP\Share', 'post_unshare', 'OC\Encryption\HookManager', 'postUnshared');
+			\OCP\Util::connectHook('OC_Filesystem', 'post_rename', 'OC\Encryption\HookManager', 'postRename');
+			\OCP\Util::connectHook('\OCA\Files_Trashbin\Trashbin', 'post_restore', 'OC\Encryption\HookManager', 'postRestore');
 		}
 	}
 
@@ -625,10 +754,11 @@ class OC {
 	 * register hooks for the cache
 	 */
 	public static function registerLogRotate() {
-		if (OC_Config::getValue('installed', false) && OC_Config::getValue('log_rotate_size', false) && !\OCP\Util::needUpgrade()) {
+		$systemConfig = \OC::$server->getSystemConfig();
+		if ($systemConfig->getValue('installed', false) && $systemConfig->getValue('log_rotate_size', false) && !\OCP\Util::needUpgrade()) {
 			//don't try to do this before we are properly setup
 			//use custom logfile path if defined, otherwise use default of owncloud.log in data directory
-			\OCP\BackgroundJob::registerJob('OC\Log\Rotate', OC_Config::getValue('logfile', OC_Config::getValue("datadirectory", OC::$SERVERROOT . '/data') . '/owncloud.log'));
+			\OCP\BackgroundJob::registerJob('OC\Log\Rotate', $systemConfig->getValue('logfile', $systemConfig->getValue('datadirectory', OC::$SERVERROOT . '/data') . '/owncloud.log'));
 		}
 	}
 
@@ -658,7 +788,7 @@ class OC {
 	 * register hooks for sharing
 	 */
 	public static function registerShareHooks() {
-		if (\OC_Config::getValue('installed')) {
+		if (\OC::$server->getSystemConfig()->getValue('installed')) {
 			OC_Hook::connect('OC_User', 'post_deleteUser', 'OC\Share\Hooks', 'post_deleteUser');
 			OC_Hook::connect('OC_User', 'post_addToGroup', 'OC\Share\Hooks', 'post_addToGroup');
 			OC_Hook::connect('OC_User', 'post_removeFromGroup', 'OC\Share\Hooks', 'post_removeFromGroup');
@@ -673,11 +803,11 @@ class OC {
 		// generate an instanceid via \OC_Util::getInstanceId() because the
 		// config file may not be writable. As such, we only register a class
 		// loader cache if instanceid is available without trying to create one.
-		$instanceId = OC_Config::getValue('instanceid', null);
+		$instanceId = \OC::$server->getSystemConfig()->getValue('instanceid', null);
 		if ($instanceId) {
 			try {
-				$memcacheFactory = new \OC\Memcache\Factory($instanceId);
-				self::$loader->setMemoryCache($memcacheFactory->createLowLatency('Autoloader'));
+				$memcacheFactory = \OC::$server->getMemCacheFactory();
+				self::$loader->setMemoryCache($memcacheFactory->createLocal('Autoloader'));
 			} catch (\Exception $ex) {
 			}
 		}
@@ -687,52 +817,60 @@ class OC {
 	 * Handle the request
 	 */
 	public static function handleRequest() {
-		$l = \OC_L10N::get('lib');
+
+		\OC::$server->getEventLogger()->start('handle_request', 'Handle request');
+		$systemConfig = \OC::$server->getSystemConfig();
 		// load all the classpaths from the enabled apps so they are available
 		// in the routing files of each app
 		OC::loadAppClassPaths();
 
 		// Check if ownCloud is installed or in maintenance (update) mode
-		if (!OC_Config::getValue('installed', false)) {
-			$controller = new OC\Core\Setup\Controller(\OC::$server->getConfig());
+		if (!$systemConfig->getValue('installed', false)) {
+			\OC::$server->getSession()->clear();
+			$setupHelper = new OC\Setup(\OC::$server->getConfig(), \OC::$server->getIniWrapper(), \OC::$server->getL10N('lib'), new \OC_Defaults());
+			$controller = new OC\Core\Setup\Controller($setupHelper);
 			$controller->run($_POST);
 			exit();
 		}
 
-		$request = OC_Request::getPathInfo();
+		$request = \OC::$server->getRequest()->getPathInfo();
 		if (substr($request, -3) !== '.js') { // we need these files during the upgrade
 			self::checkMaintenanceMode();
 			self::checkUpgrade();
 		}
 
+		// Always load authentication apps
+		OC_App::loadApps(['authentication']);
+
+		// Load minimum set of apps
+		if (!self::checkUpgrade(false)
+			&& !$systemConfig->getValue('maintenance', false)
+			&& !\OCP\Util::needUpgrade()) {
+			// For logged-in users: Load everything
+			if(OC_User::isLoggedIn()) {
+				OC_App::loadApps();
+			} else {
+				// For guests: Load only filesystem and logging
+				OC_App::loadApps(array('filesystem', 'logging'));
+				\OC_User::tryBasicAuthLogin();
+			}
+		}
+
 		if (!self::$CLI and (!isset($_GET["logout"]) or ($_GET["logout"] !== 'true'))) {
 			try {
-				if (!OC_Config::getValue('maintenance', false) && !\OCP\Util::needUpgrade()) {
-					OC_App::loadApps(array('authentication'));
+				if (!$systemConfig->getValue('maintenance', false) && !\OCP\Util::needUpgrade()) {
 					OC_App::loadApps(array('filesystem', 'logging'));
 					OC_App::loadApps();
 				}
 				self::checkSingleUserMode();
 				OC_Util::setupFS();
-				OC::$server->getRouter()->match(OC_Request::getRawPathInfo());
+				OC::$server->getRouter()->match(\OC::$server->getRequest()->getRawPathInfo());
 				return;
 			} catch (Symfony\Component\Routing\Exception\ResourceNotFoundException $e) {
 				//header('HTTP/1.0 404 Not Found');
 			} catch (Symfony\Component\Routing\Exception\MethodNotAllowedException $e) {
 				OC_Response::setStatus(405);
 				return;
-			}
-		}
-
-		// Load minimum set of apps
-		if (!self::checkUpgrade(false)) {
-			// For logged-in users: Load everything
-			if(OC_User::isLoggedIn()) {
-				OC_App::loadApps();
-			} else {
-				// For guests: Load only authentication, filesystem and logging
-				OC_App::loadApps(array('authentication'));
-				OC_App::loadApps(array('filesystem', 'logging'));
 			}
 		}
 
@@ -773,7 +911,7 @@ class OC {
 			if (isset($_GET["logout"]) and ($_GET["logout"])) {
 				OC_JSON::callCheck();
 				if (isset($_COOKIE['oc_token'])) {
-					OC_Preferences::deleteKey(OC_User::getUser(), 'login_token', $_COOKIE['oc_token']);
+					\OC::$server->getConfig()->deleteUserValue(OC_User::getUser(), 'login_token', $_COOKIE['oc_token']);
 				}
 				OC_User::logout();
 				// redirect to webroot and add slash if webroot is empty
@@ -786,32 +924,6 @@ class OC {
 			// Not handled and not logged in
 			self::handleLogin();
 		}
-	}
-
-	/**
-	 * Load a PHP file belonging to the specified application
-	 * @param array $param The application and file to load
-	 * @return bool Whether the file has been found (will return 404 and false if not)
-	 * @deprecated This function will be removed in ownCloud 8 - use proper routing instead
-	 * @param $param
-	 * @return bool Whether the file has been found (will return 404 and false if not)
-	 */
-	public static function loadAppScriptFile($param) {
-		OC_App::loadApps();
-		$app = $param['app'];
-		$file = $param['file'];
-		$app_path = OC_App::getAppPath($app);
-		$file = $app_path . '/' . $file;
-
-		if (OC_App::isEnabled($app) && $app_path !== false && OC_Helper::issubdirectory($file, $app_path)) {
-			unset($app, $app_path);
-			if (file_exists($file)) {
-				require_once $file;
-				return true;
-			}
-		}
-		header('HTTP/1.0 404 Not Found');
-		return false;
 	}
 
 	protected static function handleAuthHeaders() {
@@ -838,6 +950,7 @@ class OC {
 	protected static function handleLogin() {
 		OC_App::loadApps(array('prelogin'));
 		$error = array();
+		$messages = [];
 
 		try {
 			// auth possible via apache module?
@@ -850,13 +963,15 @@ class OC {
 			elseif (OC::tryFormLogin()) {
 				$error[] = 'invalidpassword';
 			}
+		} catch (\OC\User\LoginException $e) {
+			$messages[] = $e->getMessage();
 		} catch (\Exception $ex) {
 			\OCP\Util::logException('handleLogin', $ex);
 			// do not disclose information. show generic error
 			$error[] = 'internalexception';
 		}
 
-		OC_Util::displayLoginPage(array_unique($error));
+		OC_Util::displayLoginPage(array_unique($error), $messages);
 	}
 
 	/**
@@ -864,12 +979,13 @@ class OC {
 	 * @param string $user
 	 */
 	protected static function cleanupLoginTokens($user) {
-		$cutoff = time() - OC_Config::getValue('remember_login_cookie_lifetime', 60 * 60 * 24 * 15);
-		$tokens = OC_Preferences::getKeys($user, 'login_token');
+		$config = \OC::$server->getConfig();
+		$cutoff = time() - $config->getSystemValue('remember_login_cookie_lifetime', 60 * 60 * 24 * 15);
+		$tokens = $config->getUserKeys($user, 'login_token');
 		foreach ($tokens as $token) {
-			$time = OC_Preferences::getValue($user, 'login_token', $token);
+			$time = $config->getUserValue($user, 'login_token', $token);
 			if ($time < $cutoff) {
-				OC_Preferences::deleteKey($user, 'login_token', $token);
+				$config->deleteUserValue($user, 'login_token', $token);
 			}
 		}
 	}
@@ -883,7 +999,7 @@ class OC {
 
 		// if return is true we are logged in -> redirect to the default page
 		if ($return === true) {
-			$_REQUEST['redirect_url'] = \OC_Request::requestUri();
+			$_REQUEST['redirect_url'] = \OC::$server->getRequest()->getRequestUri();
 			OC_Util::redirectToDefaultPage();
 			exit;
 		}
@@ -932,7 +1048,7 @@ class OC {
 	}
 
 	/**
-	 * Tries to login a user using the formbased authentication
+	 * Tries to login a user using the form based authentication
 	 * @return bool|void
 	 */
 	protected static function tryFormLogin() {
@@ -948,21 +1064,23 @@ class OC {
 		//setup extra user backends
 		OC_User::setupBackends();
 
-		if (OC_User::login($_POST["user"], $_POST["password"])) {
+		if (OC_User::login((string)$_POST["user"], (string)$_POST["password"])) {
+			$userId = OC_User::getUser();
+
 			// setting up the time zone
 			if (isset($_POST['timezone-offset'])) {
-				self::$session->set('timezone', $_POST['timezone-offset']);
+				self::$server->getSession()->set('timezone', (string)$_POST['timezone-offset']);
+				self::$server->getConfig()->setUserValue($userId, 'core', 'timezone', (string)$_POST['timezone']);
 			}
 
-			$userid = OC_User::getUser();
-			self::cleanupLoginTokens($userid);
+			self::cleanupLoginTokens($userId);
 			if (!empty($_POST["remember_login"])) {
 				if (defined("DEBUG") && DEBUG) {
-					OC_Log::write('core', 'Setting remember login to cookie', OC_Log::DEBUG);
+					self::$server->getLogger()->debug('Setting remember login to cookie', array('app' => 'core'));
 				}
-				$token = OC_Util::generateRandomBytes(32);
-				OC_Preferences::setValue($userid, 'login_token', $token, time());
-				OC_User::setMagicInCookie($userid, $token);
+				$token = \OC::$server->getSecureRandom()->getMediumStrengthGenerator()->generate(32);
+				self::$server->getConfig()->setUserValue($userId, 'login_token', $token, time());
+				OC_User::setMagicInCookie($userId, $token);
 			} else {
 				OC_User::unsetMagicInCookie();
 			}
@@ -971,8 +1089,6 @@ class OC {
 		}
 		return true;
 	}
-
-
 }
 
 if (!function_exists('get_temp_dir')) {

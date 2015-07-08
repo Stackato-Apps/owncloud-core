@@ -53,7 +53,9 @@ module.exports = function(config) {
 					// up with the global namespace/classes/state
 					'apps/files_sharing/js/app.js',
 					'apps/files_sharing/js/sharedfilelist.js',
-					'apps/files_sharing/js/share.js'
+					'apps/files_sharing/js/share.js',
+					'apps/files_sharing/js/external.js',
+					'apps/files_sharing/js/public.js'
 				],
 				testFiles: ['apps/files_sharing/tests/js/*.js']
 			},
@@ -63,16 +65,21 @@ module.exports = function(config) {
 					// only test these files, others are not ready and mess
 					// up with the global namespace/classes/state
 					'apps/files_external/js/app.js',
-					'apps/files_external/js/mountsfilelist.js'
+					'apps/files_external/js/mountsfilelist.js',
+					'apps/files_external/js/settings.js'
 				],
 				testFiles: ['apps/files_external/tests/js/*.js']
 			},
 			{
 				name: 'settings',
 				srcFiles: [
+					'settings/js/apps.js',
 					'settings/js/users/deleteHandler.js'
 				],
-				testFiles: ['settings/tests/js/users/deleteHandlerSpec.js']
+				testFiles: [
+					'settings/tests/js/appsSpec.js',
+					'settings/tests/js/users/deleteHandlerSpec.js'
+				]
 			}
 		];
 	}
@@ -99,6 +106,7 @@ module.exports = function(config) {
 	// note that the loading order is important that's why they
 	// are specified in a separate file
 	var corePath = 'core/js/';
+	var vendorPath = 'core/vendor/';
 	var coreModule = require('../' + corePath + 'core.json');
 	var testCore = false;
 	var files = [];
@@ -119,6 +127,12 @@ module.exports = function(config) {
 	files.push(corePath + 'tests/specHelper.js');
 
 	var srcFile, i;
+	// add vendor library files
+	for ( i = 0; i < coreModule.vendor.length; i++ ) {
+		srcFile = vendorPath + coreModule.vendor[i];
+		files.push(srcFile);
+	}
+
 	// add core library files
 	for ( i = 0; i < coreModule.libraries.length; i++ ) {
 		srcFile = corePath + coreModule.libraries[i];

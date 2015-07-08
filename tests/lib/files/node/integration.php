@@ -8,20 +8,16 @@
 
 namespace Test\Files\Node;
 
-use OC\Files\Cache\Cache;
 use OC\Files\Node\Root;
 use OC\Files\Storage\Temporary;
 use OC\Files\View;
 use OC\User\User;
 
-class IntegrationTests extends \PHPUnit_Framework_TestCase {
+class IntegrationTests extends \Test\TestCase {
 	/**
 	 * @var \OC\Files\Node\Root $root
 	 */
 	private $root;
-
-	/** @var \OC\Files\Storage\Storage */
-	private $originalStorage;
 
 	/**
 	 * @var \OC\Files\Storage\Storage[]
@@ -36,20 +32,13 @@ class IntegrationTests extends \PHPUnit_Framework_TestCase {
 	protected function setUp() {
 		parent::setUp();
 
-		$this->originalStorage = \OC\Files\Filesystem::getStorage('/');
-		\OC\Files\Filesystem::init('', '');
-		\OC\Files\Filesystem::clearMounts();
 		$manager = \OC\Files\Filesystem::getMountManager();
 
 		\OC_Hook::clear('OC_Filesystem');
 
-		\OC_Hook::connect('OC_Filesystem', 'post_write', '\OC\Files\Cache\Updater', 'writeHook');
-		\OC_Hook::connect('OC_Filesystem', 'post_delete', '\OC\Files\Cache\Updater', 'deleteHook');
-		\OC_Hook::connect('OC_Filesystem', 'post_rename', '\OC\Files\Cache\Updater', 'renameHook');
-		\OC_Hook::connect('OC_Filesystem', 'post_touch', '\OC\Files\Cache\Updater', 'touchHook');
+		$user = new User($this->getUniqueID('user'), new \OC_User_Dummy);
+		$this->loginAsUser($user->getUID());
 
-		$user = new User(uniqid('user'), new \OC_User_Dummy);
-		\OC_User::setUserId($user->getUID());
 		$this->view = new View();
 		$this->root = new Root($manager, $this->view, $user);
 		$storage = new Temporary(array());
@@ -64,10 +53,8 @@ class IntegrationTests extends \PHPUnit_Framework_TestCase {
 		foreach ($this->storages as $storage) {
 			$storage->getCache()->clear();
 		}
-		\OC\Files\Filesystem::clearMounts();
 
-		\OC\Files\Filesystem::mount($this->originalStorage, array(), '/');
-
+		$this->logout();
 		parent::tearDown();
 	}
 
@@ -81,14 +68,16 @@ class IntegrationTests extends \PHPUnit_Framework_TestCase {
 		$this->assertEquals('text/plain', $file->getMimeType());
 		$this->assertEquals('qwerty', $file->getContent());
 		$this->assertFalse($this->root->nodeExists('/bar.txt'));
-		$file->move('/bar.txt');
+		$target = $file->move('/bar.txt');
+		$this->assertEquals($id, $target->getId());
+		$this->assertEquals($id, $file->getId());
 		$this->assertFalse($this->root->nodeExists('/foo.txt'));
 		$this->assertTrue($this->root->nodeExists('/bar.txt'));
 		$this->assertEquals('bar.txt', $file->getName());
 		$this->assertEquals('bar.txt', $file->getInternalPath());
 
 		$file->move('/substorage/bar.txt');
-		$this->assertNotEquals($id, $file->getId());
+		$this->assertEquals($id, $file->getId());
 		$this->assertEquals('qwerty', $file->getContent());
 	}
 

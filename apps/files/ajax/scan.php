@@ -1,11 +1,37 @@
 <?php
+/**
+ * @author Bart Visscher <bartv@thisnet.nl>
+ * @author Jörn Friedrich Dreyer <jfd@butonic.de>
+ * @author Lukas Reschke <lukas@owncloud.com>
+ * @author Robin Appelman <icewind@owncloud.com>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
+ */
 set_time_limit(0); //scanning can take ages
-\OC::$session->close();
+
+\OCP\JSON::checkLoggedIn();
+\OCP\JSON::callCheck();
+
+\OC::$server->getSession()->close();
 
 $force = (isset($_GET['force']) and ($_GET['force'] === 'true'));
-$dir = isset($_GET['dir']) ? $_GET['dir'] : '';
+$dir = isset($_GET['dir']) ? (string)$_GET['dir'] : '';
 if (isset($_GET['users'])) {
-	OC_JSON::checkAdminUser();
+	\OCP\JSON::checkAdminUser();
 	if ($_GET['users'] === 'all') {
 		$users = OC_User::getUsers();
 	} else {
@@ -15,12 +41,12 @@ if (isset($_GET['users'])) {
 	$users = array(OC_User::getUser());
 }
 
-$eventSource = new OC_EventSource();
+$eventSource = \OC::$server->createEventSource();
 $listener = new ScanListener($eventSource);
 
 foreach ($users as $user) {
 	$eventSource->send('user', $user);
-	$scanner = new \OC\Files\Utils\Scanner($user);
+	$scanner = new \OC\Files\Utils\Scanner($user, \OC::$server->getDatabaseConnection());
 	$scanner->listen('\OC\Files\Utils\Scanner', 'scanFile', array($listener, 'file'));
 	$scanner->listen('\OC\Files\Utils\Scanner', 'scanFolder', array($listener, 'folder'));
 	if ($force) {
@@ -39,12 +65,12 @@ class ScanListener {
 	private $lastCount = 0;
 
 	/**
-	 * @var \OC_EventSource event source to pass events to
+	 * @var \OCP\IEventSource event source to pass events to
 	 */
 	private $eventSource;
 
 	/**
-	 * @param \OC_EventSource $eventSource
+	 * @param \OCP\IEventSource $eventSource
 	 */
 	public function __construct($eventSource) {
 		$this->eventSource = $eventSource;

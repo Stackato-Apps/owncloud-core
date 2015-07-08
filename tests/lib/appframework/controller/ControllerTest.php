@@ -27,6 +27,7 @@ namespace OCP\AppFramework;
 use OC\AppFramework\Http\Request;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Http\JSONResponse;
+use OCP\AppFramework\Http\DataResponse;
 
 
 class ChildController extends Controller {
@@ -45,9 +46,15 @@ class ChildController extends Controller {
 
 		return $in;
 	}
+
+	public function customDataResponse($in) {
+		$response = new DataResponse($in, 300);
+		$response->addHeader('test', 'something');
+		return $response;
+	}
 };
 
-class ControllerTest extends \PHPUnit_Framework_TestCase {
+class ControllerTest extends \Test\TestCase {
 
 	/**
 	 * @var Controller
@@ -56,16 +63,20 @@ class ControllerTest extends \PHPUnit_Framework_TestCase {
 	private $app;
 
 	protected function setUp(){
+		parent::setUp();
+
 		$request = new Request(
-			array(
-				'get' => array('name' => 'John Q. Public', 'nickname' => 'Joey'),
-				'post' => array('name' => 'Jane Doe', 'nickname' => 'Janey'),
-				'urlParams' => array('name' => 'Johnny Weissmüller'),
-				'files' => array('file' => 'filevalue'),
-				'env' => array('PATH' => 'daheim'),
-				'session' => array('sezession' => 'kein'),
+			[
+				'get' => ['name' => 'John Q. Public', 'nickname' => 'Joey'],
+				'post' => ['name' => 'Jane Doe', 'nickname' => 'Janey'],
+				'urlParams' => ['name' => 'Johnny Weissmüller'],
+				'files' => ['file' => 'filevalue'],
+				'env' => ['PATH' => 'daheim'],
+				'session' => ['sezession' => 'kein'],
 				'method' => 'hi',
-			)
+			],
+			$this->getMock('\OCP\Security\ISecureRandom'),
+			$this->getMock('\OCP\IConfig')
 		);
 
 		$this->app = $this->getMock('OC\AppFramework\DependencyInjection\DIContainer',
@@ -158,6 +169,23 @@ class ControllerTest extends \PHPUnit_Framework_TestCase {
 		$response = $this->controller->buildResponse(array('hi'), 'json');
 
 		$this->assertEquals(array('hi'), $response->getData());
+	}
+
+
+	public function testFormatDataResponseJSON() {
+		$expectedHeaders = [
+			'test' => 'something',
+			'Cache-Control' => 'no-cache, must-revalidate',
+			'Content-Type' => 'application/json; charset=utf-8',
+			'Content-Security-Policy' => "default-src 'none';script-src 'self' 'unsafe-eval';style-src 'self' 'unsafe-inline';img-src 'self';font-src 'self';connect-src 'self';media-src 'self'",
+		];
+
+		$response = $this->controller->customDataResponse(array('hi'));
+		$response = $this->controller->buildResponse($response, 'json');
+
+		$this->assertEquals(array('hi'), $response->getData());
+		$this->assertEquals(300, $response->getStatus());
+		$this->assertEquals($expectedHeaders, $response->getHeaders());
 	}
 
 

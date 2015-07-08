@@ -1,32 +1,40 @@
 <?php
 /**
- * ownCloud
+ * @author Bart Visscher <bartv@thisnet.nl>
+ * @author Joas Schilling <nickvergessen@owncloud.com>
+ * @author Jörn Friedrich Dreyer <jfd@butonic.de>
+ * @author Lukas Reschke <lukas@owncloud.com>
+ * @author Michael Gapczynski <GapczynskiM@gmail.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Robin McCorkell <rmccorkell@karoshi.org.uk>
  *
- * @author Frank Karlitschek
- * @author Jakob Sack
- * @copyright 2012 Frank Karlitschek frank@owncloud.org
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
  *
- * This file is licensed under the Affero General Public License version 3 or
- * later.
- * See the COPYING-README file.
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
  */
 
 /**
  * This class is responsible for reading and writing config.php, the very basic
  * configuration file of ownCloud.
+ *
+ * @deprecated use \OC::$server->getConfig() to get an \OCP\Config instance
  */
 class OC_Config {
 
 	/** @var \OC\Config */
 	public static $object;
-
-	/**
-	 * Returns the config instance
-	 * @return \OC\Config
-	 */
-	public static function getObject() {
-		return self::$object;
-	}
 
 	/**
 	 * Lists all available config keys
@@ -62,6 +70,16 @@ class OC_Config {
 	 */
 	public static function setValue($key, $value) {
 		self::$object->setValue($key, $value);
+	}
+
+	/**
+	 * Sets and deletes values and writes the config.php
+	 *
+	 * @param array $configs Associative array with `key => value` pairs
+	 *                       If value is null, the config key will be deleted
+	 */
+	public static function setValues(array $configs) {
+		self::$object->setValues($configs);
 	}
 
 	/**

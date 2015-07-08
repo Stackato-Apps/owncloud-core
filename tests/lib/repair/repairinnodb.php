@@ -5,13 +5,14 @@
  * later.
  * See the COPYING-README file.
  */
+namespace Test\Repair;
 
 /**
  * Tests for the converting of MySQL tables to InnoDB engine
  *
  * @see \OC\Repair\RepairMimeTypes
  */
-class TestRepairInnoDB extends PHPUnit_Framework_TestCase {
+class RepairInnoDB extends \Test\TestCase {
 
 	/** @var \OC\RepairStep */
 	private $repair;
@@ -22,21 +23,24 @@ class TestRepairInnoDB extends PHPUnit_Framework_TestCase {
 	/** @var string */
 	private $tableName;
 
-	public function setUp() {
+	protected function setUp() {
+		parent::setUp();
+
 		$this->connection = \OC_DB::getConnection();
 		if (!$this->connection->getDatabasePlatform() instanceof \Doctrine\DBAL\Platforms\MySqlPlatform) {
 			$this->markTestSkipped("Test only relevant on MySql");
 		}
 
 		$dbPrefix = \OC::$server->getConfig()->getSystemValue("dbtableprefix");
-		$this->tableName = uniqid($dbPrefix . "_innodb_test");
+		$this->tableName = $this->getUniqueID($dbPrefix . "_innodb_test");
 		$this->connection->exec("CREATE TABLE $this->tableName(id INT) ENGINE MyISAM");
 
 		$this->repair = new \OC\Repair\InnoDB();
 	}
 
-	public function tearDown() {
+	protected function tearDown() {
 		$this->connection->getSchemaManager()->dropTable($this->tableName);
+		parent::tearDown();
 	}
 
 	public function testInnoDBConvert() {

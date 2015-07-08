@@ -1,29 +1,28 @@
 <?php
-
 /**
- * ownCloud – LDAP User
+ * @author Arthur Schiwon <blizzz@owncloud.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
  *
- * @author Arthur Schiwon
- * @copyright 2014 Arthur Schiwon blizzz@owncloud.com
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE
- * License as published by the Free Software Foundation; either
- * version 3 of the License, or any later version.
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
  *
- * This library is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU AFFERO GENERAL PUBLIC LICENSE for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU Affero General Public
- * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
  *
  */
 
 namespace OCA\user_ldap\lib\user;
 
-use OCA\user_ldap\lib\Access;
+use OCA\User_LDAP\Mapping\UserMapping;
 
 class OfflineUser {
 	/**
@@ -59,23 +58,29 @@ class OfflineUser {
 	 */
 	protected $hasActiveShares;
 	/**
-	 * @var \OC\Preferences $preferences
+	 * @var \OCP\IConfig $config
 	 */
-	protected $preferences;
+	protected $config;
 	/**
 	 * @var \OCP\IDBConnection $db
 	 */
 	protected $db;
 	/**
-	 * @var \OCA\user_ldap\lib\Access
+	 * @var \OCA\User_LDAP\Mapping\UserMapping
 	 */
-	protected $access;
+	protected $mapping;
 
-	public function __construct($ocName, \OC\Preferences $preferences, \OCP\IDBConnection $db, Access $access) {
+	/**
+	 * @param string $ocName
+	 * @param OCP\IConfig $config
+	 * @param OCP\IDBConnection $db
+	 * @param OCA\User_LDAP\Mapping\UserMapping $mapping
+	 */
+	public function __construct($ocName, \OCP\IConfig $config, \OCP\IDBConnection $db, UserMapping $mapping) {
 		$this->ocName = $ocName;
-		$this->preferences = $preferences;
+		$this->config = $config;
 		$this->db = $db;
-		$this->access = $access;
+		$this->mapping = $mapping;
 		$this->fetchDetails();
 	}
 
@@ -173,10 +178,10 @@ class OfflineUser {
 			'lastLogin'   => 'login'
 		);
 		foreach($properties as $property => $app) {
-			$this->$property = $this->preferences->getValue($this->ocName, $app, $property, '');
+			$this->$property = $this->config->getUserValue($this->ocName, $app, $property, '');
 		}
 
-		$dn = $this->access->ocname2dn($this->ocName, true);
+		$dn = $this->mapping->getDNByName($this->ocName);
 		$this->dn = ($dn !== false) ? $dn : '';
 
 		$this->determineShares();

@@ -1,41 +1,63 @@
 <?php
 /**
- * Copyright (c) 2012 Bart Visscher <bartv@thisnet.nl>
- * This file is licensed under the Affero General Public License version 3 or
- * later.
- * See the COPYING-README file.
+ * @author Bart Visscher <bartv@thisnet.nl>
+ * @author Bernhard Posselt <dev@bernhard-posselt.com>
+ * @author Christopher Schäpers <kondou@ts.unde.re>
+ * @author Georg Ehrke <georg@owncloud.com>
+ * @author Lukas Reschke <lukas@owncloud.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Roeland Jago Douma <roeland@famdouma.nl>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
+ * @author Thomas Tanghus <thomas@tanghus.net>
+ * @author Victor Dubiniuk <dubiniuk@owncloud.com>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
  */
 
-use OC\Core\LostPassword\Application;
+use OC\Core\Application;
 
 $application = new Application();
-$application->registerRoutes($this, array('routes' => array(
-		array('name' => 'lost#email', 'url' => '/lostpassword/email', 'verb' => 'POST'),
-		array('name' => 'lost#resetform', 'url' => '/lostpassword/reset/form/{token}/{userId}', 'verb' => 'GET'),
-		array('name' => 'lost#setPassword', 'url' => '/lostpassword/set/{token}/{userId}', 'verb' => 'POST'),
-	)
-));
+$application->registerRoutes($this, [
+	'routes' => [
+		['name' => 'lost#email', 'url' => '/lostpassword/email', 'verb' => 'POST'],
+		['name' => 'lost#resetform', 'url' => '/lostpassword/reset/form/{token}/{userId}', 'verb' => 'GET'],
+		['name' => 'lost#setPassword', 'url' => '/lostpassword/set/{token}/{userId}', 'verb' => 'POST'],
+		['name' => 'user#getDisplayNames', 'url' => '/displaynames', 'verb' => 'POST'],
+		['name' => 'avatar#getAvatar', 'url' => '/avatar/{userId}/{size}', 'verb' => 'GET'],
+		['name' => 'avatar#deleteAvatar', 'url' => '/avatar/', 'verb' => 'DELETE'],
+		['name' => 'avatar#postCroppedAvatar', 'url' => '/avatar/cropped', 'verb' => 'POST'],
+		['name' => 'avatar#getTmpAvatar', 'url' => '/avatar/tmp', 'verb' => 'GET'],
+		['name' => 'avatar#postAvatar', 'url' => '/avatar/', 'verb' => 'POST'],
+	]
+]);
 
 // Post installation check
 
 /** @var $this OCP\Route\IRouter */
 // Core ajax actions
 // Search
-$this->create('search_ajax_search', '/search/ajax/search.php')
-	->actionInclude('search/ajax/search.php');
+$this->create('search_ajax_search', '/core/search')
+	->actionInclude('core/search/ajax/search.php');
 // AppConfig
 $this->create('core_ajax_appconfig', '/core/ajax/appconfig.php')
 	->actionInclude('core/ajax/appconfig.php');
 // Share
 $this->create('core_ajax_share', '/core/ajax/share.php')
 	->actionInclude('core/ajax/share.php');
-// Translations
-$this->create('core_ajax_translations', '/core/ajax/translations.php')
-	->actionInclude('core/ajax/translations.php');
-// User display names
-$this->create('core_user_displaynames', '/displaynames')
-	->get()
-	->action('OC\Core\User\Controller', 'getDisplayNames');
 // Tags
 $this->create('core_tags_tags', '/tags/{type}')
 	->get()
@@ -81,33 +103,26 @@ $this->create('core_ajax_preview', '/core/preview')
 	->actionInclude('core/ajax/preview.php');
 $this->create('core_ajax_preview', '/core/preview.png')
 	->actionInclude('core/ajax/preview.php');
+$this->create('core_ajax_update', '/core/ajax/update.php')
+	->actionInclude('core/ajax/update.php');
 
-// Avatar routes
-$this->create('core_avatar_get_tmp', '/avatar/tmp')
-	->get()
-	->action('OC\Core\Avatar\Controller', 'getTmpAvatar');
-$this->create('core_avatar_get', '/avatar/{user}/{size}')
-	->get()
-	->action('OC\Core\Avatar\Controller', 'getAvatar');
-$this->create('core_avatar_post', '/avatar/')
-	->post()
-	->action('OC\Core\Avatar\Controller', 'postAvatar');
-$this->create('core_avatar_delete', '/avatar/')
-	->delete()
-	->action('OC\Core\Avatar\Controller', 'deleteAvatar');
-$this->create('core_avatar_post_cropped', '/avatar/cropped')
-	->post()
-	->action('OC\Core\Avatar\Controller', 'postCroppedAvatar');
-
-// Not specifically routed
-$this->create('app_index_script', '/apps/{app}/')
-	->defaults(array('file' => 'index.php'))
-	//->requirements(array('file' => '.*.php'))
-	->action('OC', 'loadAppScriptFile');
-$this->create('app_script', '/apps/{app}/{file}')
-	->defaults(array('file' => 'index.php'))
-	->requirements(array('file' => '.*.php'))
-	->action('OC', 'loadAppScriptFile');
+// Sharing routes
+$this->create('files_sharing.sharecontroller.showShare', '/s/{token}')->action(function($urlParams) {
+	$app = new \OCA\Files_Sharing\AppInfo\Application($urlParams);
+	$app->dispatch('ShareController', 'showShare');
+});
+$this->create('files_sharing.sharecontroller.authenticate', '/s/{token}/authenticate')->post()->action(function($urlParams) {
+	$app = new \OCA\Files_Sharing\AppInfo\Application($urlParams);
+	$app->dispatch('ShareController', 'authenticate');
+});
+$this->create('files_sharing.sharecontroller.showAuthenticate', '/s/{token}/authenticate')->get()->action(function($urlParams) {
+	$app = new \OCA\Files_Sharing\AppInfo\Application($urlParams);
+	$app->dispatch('ShareController', 'showAuthenticate');
+});
+$this->create('files_sharing.sharecontroller.downloadShare', '/s/{token}/download')->get()->action(function($urlParams) {
+	$app = new \OCA\Files_Sharing\AppInfo\Application($urlParams);
+	$app->dispatch('ShareController', 'downloadShare');
+});
 
 // used for heartbeat
 $this->create('heartbeat', '/heartbeat')->action(function(){

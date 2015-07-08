@@ -1,9 +1,28 @@
 <?php
 /**
- * Copyright (c) 2014 Robin Appelman <icewind@owncloud.com>
- * This file is licensed under the Affero General Public License version 3 or
- * later.
- * See the COPYING-README file.
+ * @author martin-rueegg <martin.rueegg@metaworx.ch>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Robin Appelman <icewind@owncloud.com>
+ * @author tbelau666 <thomas.belau@gmx.de>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
+ * @author Victor Dubiniuk <dubiniuk@owncloud.com>
+ * @author Vincent Petry <pvince81@owncloud.com>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
  */
 
 namespace OC\DB;
@@ -14,18 +33,33 @@ use \Doctrine\DBAL\Schema\Table;
 use \Doctrine\DBAL\Schema\Schema;
 use \Doctrine\DBAL\Schema\SchemaConfig;
 use \Doctrine\DBAL\Schema\Comparator;
+use OCP\IConfig;
+use OCP\Security\ISecureRandom;
 
 class Migrator {
+
 	/**
 	 * @var \Doctrine\DBAL\Connection $connection
 	 */
 	protected $connection;
 
 	/**
-	 * @param \Doctrine\DBAL\Connection $connection
+	 * @var ISecureRandom
 	 */
-	public function __construct(\Doctrine\DBAL\Connection $connection) {
+	private $random;
+
+	/** @var IConfig */
+	protected $config;
+
+	/**
+	 * @param \Doctrine\DBAL\Connection $connection
+	 * @param ISecureRandom $random
+	 * @param IConfig $config
+	 */
+	public function __construct(\Doctrine\DBAL\Connection $connection, ISecureRandom $random, IConfig $config) {
 		$this->connection = $connection;
+		$this->random = $random;
+		$this->config = $config;
 	}
 
 	/**
@@ -45,8 +79,7 @@ class Migrator {
 		$script = '';
 		$sqls = $schemaDiff->toSql($this->connection->getDatabasePlatform());
 		foreach ($sqls as $sql) {
-			$script .= $sql . ';';
-			$script .= PHP_EOL;
+			$script .= $this->convertStatementToScript($sql);
 		}
 
 		return $script;
@@ -61,7 +94,9 @@ class Migrator {
 		 * @var \Doctrine\DBAL\Schema\Table[] $tables
 		 */
 		$tables = $targetSchema->getTables();
-
+		$filterExpression = $this->getFilterExpression();
+		$this->connection->getConfiguration()->
+			setFilterSchemaAssetsExpression($filterExpression);
 		$existingTables = $this->connection->getSchemaManager()->listTableNames();
 
 		foreach ($tables as $table) {
@@ -84,7 +119,7 @@ class Migrator {
 	 * @return string
 	 */
 	protected function generateTemporaryTableName($name) {
-		return 'oc_' . $name . '_' . \OCP\Util::generateRandomBytes(13);
+		return $this->config->getSystemValue('dbtableprefix', 'oc_') . $name . '_' . $this->random->generate(13, ISecureRandom::CHAR_LOWER . ISecureRandom::CHAR_DIGITS);
 	}
 
 	/**
@@ -135,7 +170,7 @@ class Migrator {
 				$indexName = $index->getName();
 			} else {
 				// avoid conflicts in index names
-				$indexName = 'oc_' . \OCP\Util::generateRandomBytes(13);
+				$indexName = $this->config->getSystemValue('dbtableprefix', 'oc_') . $this->random->generate(13, ISecureRandom::CHAR_LOWER);
 			}
 			$newIndexes[] = new Index($indexName, $index->getColumns(), $index->isUnique(), $index->isPrimary());
 		}
@@ -145,6 +180,9 @@ class Migrator {
 	}
 
 	protected function getDiff(Schema $targetSchema, \Doctrine\DBAL\Connection $connection) {
+		$filterExpression = $this->getFilterExpression();
+		$this->connection->getConfiguration()->
+		setFilterSchemaAssetsExpression($filterExpression);
 		$sourceSchema = $connection->getSchemaManager()->createSchema();
 
 		// remove tables we don't know about
@@ -200,5 +238,20 @@ class Migrator {
 	 */
 	protected function dropTable($name) {
 		$this->connection->exec('DROP TABLE ' . $this->connection->quoteIdentifier($name));
+	}
+
+	/**
+	 * @param $statement
+	 * @return string
+	 */
+	protected function convertStatementToScript($statement) {
+		$script = $statement . ';';
+		$script .= PHP_EOL;
+		$script .= PHP_EOL;
+		return $script;
+	}
+
+	protected function getFilterExpression() {
+		return '/^' . preg_quote($this->config->getSystemValue('dbtableprefix', 'oc_')) . '/';
 	}
 }

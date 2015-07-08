@@ -1,23 +1,23 @@
 <?php
-
 /**
- * ownCloud – LDAP User
+ * @author Arthur Schiwon <blizzz@owncloud.com>
+ * @author Jörn Friedrich Dreyer <jfd@butonic.de>
+ * @author Morris Jobke <hey@morrisjobke.de>
  *
- * @author Arthur Schiwon
- * @copyright 2014 Arthur Schiwon blizzz@owncloud.com
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE
- * License as published by the Free Software Foundation; either
- * version 3 of the License, or any later version.
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
  *
- * This library is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU AFFERO GENERAL PUBLIC LICENSE for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU Affero General Public
- * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
  *
  */
 
@@ -36,30 +36,27 @@ use OCA\user_ldap\lib\user\OfflineUser;
  * cache
  */
 class Manager {
-	/**
-	 * @var IUserTools
-	 */
+	/** @var IUserTools */
 	protected $access;
-	/**
-	 * @var \OCP\IConfig
-	 */
+
+	/** @var \OCP\IConfig */
 	protected $ocConfig;
-	/**
-	 * @var FilesystemHelper
-	 */
+
+	/** @var \OCP\IDBConnection */
+	protected $db;
+
+	/** @var FilesystemHelper */
 	protected $ocFilesystem;
-	/**
-	 * @var LogWrapper
-	 */
+
+	/** @var LogWrapper */
 	protected $ocLog;
-	/**
-	 * @var \OCP\Image
-	 */
+
+	/** @var \OCP\Image */
 	protected $image;
-	/**
-	 * @param \OCP\IAvatarManager
-	 */
+
+	/** @param \OCP\IAvatarManager */
 	protected $avatarManager;
+
 	/**
 	 * array['byDN']	\OCA\user_ldap\lib\User[]
 	 * 	['byUid']	\OCA\user_ldap\lib\User[]
@@ -71,29 +68,25 @@ class Manager {
 	);
 
 	/**
-	 * @brief Constructor
-	 * @param \OCP\IConfig respectively an instance that provides the methods
-	 * setUserValue and getUserValue as implemented in \OCP\Config
-	 * @param \OCA\user_ldap\lib\FilesystemHelper object that gives access to
-	 * necessary functions from the OC filesystem
-	 * @param  \OCA\user_ldap\lib\LogWrapper
-	 * @param \OCP\IAvatarManager
-	 * @param \OCP\Image an empty image instance
+	 * @param \OCP\IConfig $ocConfig
+	 * @param \OCA\user_ldap\lib\FilesystemHelper $ocFilesystem object that
+	 * gives access to necessary functions from the OC filesystem
+	 * @param  \OCA\user_ldap\lib\LogWrapper $ocLog
+	 * @param \OCP\IAvatarManager $avatarManager
+	 * @param \OCP\Image $image an empty image instance
+	 * @param \OCP\IDBConnection $db
 	 * @throws Exception when the methods mentioned above do not exist
 	 */
 	public function __construct(\OCP\IConfig $ocConfig,
 		FilesystemHelper $ocFilesystem, LogWrapper $ocLog,
-		\OCP\IAvatarManager $avatarManager, \OCP\Image $image) {
+		\OCP\IAvatarManager $avatarManager, \OCP\Image $image, \OCP\IDBConnection $db) {
 
-		if(!method_exists($ocConfig, 'setUserValue')
-		   || !method_exists($ocConfig, 'getUserValue')) {
-			throw new \Exception('Invalid ownCloud User Config object');
-		}
 		$this->ocConfig      = $ocConfig;
 		$this->ocFilesystem  = $ocFilesystem;
 		$this->ocLog         = $ocLog;
 		$this->avatarManager = $avatarManager;
 		$this->image         = $image;
+		$this->db            = $db;
 	}
 
 	/**
@@ -152,9 +145,9 @@ class Manager {
 	public function getDeletedUser($id) {
 		return new OfflineUser(
 			$id,
-			new \OC\Preferences(\OC_DB::getConnection()),
-			\OC::$server->getDatabaseConnection(),
-			$this->access);
+			$this->ocConfig,
+			$this->db,
+			$this->access->getUserMapper());
 	}
 
 	/**
@@ -176,7 +169,7 @@ class Manager {
 
 	/**
 	 * @brief returns a User object by it's DN or ownCloud username
-	 * @param string the username of the user
+	 * @param string the DN or username of the user
 	 * @return \OCA\user_ldap\lib\user\User|\OCA\user_ldap\lib\user\OfflineUser|null
 	 * @throws \Exception when connection could not be established
 	 */

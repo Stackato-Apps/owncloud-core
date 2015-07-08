@@ -1,26 +1,25 @@
 <?php
 /**
-* ownCloud
-*
-* @author Arthur Schiwon
-* @copyright 2014 Arthur Schiwon <blizzz@owncloud.com>
-*
-* This library is free software; you can redistribute it and/or
-* modify it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE
-* License as published by the Free Software Foundation; either
-* version 3 of the License, or any later version.
-*
-* This library is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU AFFERO GENERAL PUBLIC LICENSE for more details.
-*
-* You should have received a copy of the GNU Affero General Public
-* License along with this library.  If not, see <http://www.gnu.org/licenses/>.
-*
-*/
-
-namespace OCA\user_ldap\tests;
+ * @author Arthur Schiwon <blizzz@owncloud.com>
+ * @author Joas Schilling <nickvergessen@owncloud.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
+ */
 
 namespace OCA\user_ldap\tests;
 
@@ -29,7 +28,7 @@ use \OCA\user_ldap\lib\Access;
 use \OCA\user_ldap\lib\Connection;
 use \OCA\user_ldap\lib\ILDAPWrapper;
 
-class Test_Group_Ldap extends \PHPUnit_Framework_TestCase {
+class Test_Group_Ldap extends \Test\TestCase {
 	private function getAccessMock() {
 		static $conMethods;
 		static $accMethods;
@@ -47,7 +46,8 @@ class Test_Group_Ldap extends \PHPUnit_Framework_TestCase {
 				$this->getMock('\OCA\user_ldap\lib\FilesystemHelper'),
 				$this->getMock('\OCA\user_ldap\lib\LogWrapper'),
 				$this->getMock('\OCP\IAvatarManager'),
-				$this->getMock('\OCP\Image')
+				$this->getMock('\OCP\Image'),
+				$this->getMock('\OCP\IDBConnection')
 			);
 		$access = $this->getMock('\OCA\user_ldap\lib\Access',
 								 $accMethods,
@@ -381,6 +381,65 @@ class Test_Group_Ldap extends \PHPUnit_Framework_TestCase {
 		$users = $groupBackend->countUsersInGroup('foobar');
 
 		$this->assertSame(4, $users);
+	}
+
+	public function testGetUserGroupsMemberOf() {
+		$access = $this->getAccessMock();
+		$this->enableGroups($access);
+
+		$dn = 'cn=userX,dc=foobar';
+
+		$access->connection->hasPrimaryGroups = false;
+
+		$access->expects($this->once())
+			->method('username2dn')
+			->will($this->returnValue($dn));
+
+		$access->expects($this->once())
+			->method('readAttribute')
+			->with($dn, 'memberOf')
+			->will($this->returnValue(['cn=groupA,dc=foobar', 'cn=groupB,dc=foobar']));
+
+		$access->expects($this->exactly(2))
+			->method('dn2groupname')
+			->will($this->returnArgument(0));
+
+		$groupBackend = new GroupLDAP($access);
+		$groups = $groupBackend->getUserGroups('userX');
+
+		$this->assertSame(2, count($groups));
+	}
+
+	public function testGetUserGroupsMemberOfDisabled() {
+		$access = $this->getAccessMock();
+
+		$access->connection->expects($this->any())
+			->method('__get')
+			->will($this->returnCallback(function($name) {
+				if($name === 'useMemberOfToDetectMembership') {
+					return 0;
+				}
+				return 1;
+			}));
+
+		$dn = 'cn=userX,dc=foobar';
+
+		$access->connection->hasPrimaryGroups = false;
+
+		$access->expects($this->once())
+			->method('username2dn')
+			->will($this->returnValue($dn));
+
+		$access->expects($this->never())
+			->method('readAttribute')
+			->with($dn, 'memberOf');
+
+		$access->expects($this->once())
+			->method('ownCloudGroupNames')
+			->will($this->returnValue([]));
+
+		$groupBackend = new GroupLDAP($access);
+		$groupBackend->getUserGroups('userX');
 	}
 
 }

@@ -1,9 +1,28 @@
 <?php
 /**
- * Copyright (c) 2013 Robin Appelman <icewind@owncloud.com>
- * This file is licensed under the Affero General Public License version 3 or
- * later.
- * See the COPYING-README file.
+ * @author Andreas Fischer <bantu@owncloud.com>
+ * @author Georg Ehrke <georg@owncloud.com>
+ * @author Markus Goetz <markus@woboq.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Robin Appelman <icewind@owncloud.com>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
+ * @author Victor Dubiniuk <dubiniuk@owncloud.com>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
  */
 
 namespace OC;
@@ -20,26 +39,6 @@ class Autoloader {
 	 * @var \OC\Memcache\Cache
 	 */
 	protected $memoryCache;
-
-	/**
-	 * Add a custom prefix to the autoloader
-	 *
-	 * @param string $prefix
-	 * @param string $path
-	 */
-	public function registerPrefix($prefix, $path) {
-		$this->prefixPaths[$prefix] = $path;
-	}
-
-	/**
-	 * Add a custom classpath to the autoloader
-	 *
-	 * @param string $class
-	 * @param string $path
-	 */
-	public function registerClass($class, $path) {
-		$this->classPaths[$class] = $path;
-	}
 
 	/**
 	 * disable the usage of the global classpath \OC::$CLASSPATH
@@ -99,14 +98,6 @@ class Autoloader {
 			$paths[] = 'tests/lib/' . strtolower(str_replace('_', '/', substr($class, 5)) . '.php');
 		} elseif (strpos($class, 'Test\\') === 0) {
 			$paths[] = 'tests/lib/' . strtolower(str_replace('\\', '/', substr($class, 5)) . '.php');
-		} else {
-			foreach ($this->prefixPaths as $prefix => $dir) {
-				if (0 === strpos($class, $prefix)) {
-					$path = str_replace('\\', '/', $class) . '.php';
-					$path = str_replace('_', '/', $path);
-					$paths[] = $dir . '/' . $path;
-				}
-			}
 		}
 		return $paths;
 	}

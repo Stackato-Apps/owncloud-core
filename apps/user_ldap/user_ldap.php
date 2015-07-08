@@ -1,39 +1,57 @@
 <?php
-
 /**
- * ownCloud
+ * @author Andreas Fischer <bantu@owncloud.com>
+ * @author Arthur Schiwon <blizzz@owncloud.com>
+ * @author Bart Visscher <bartv@thisnet.nl>
+ * @author Christopher Schäpers <kondou@ts.unde.re>
+ * @author Dominik Schmidt <dev@dominik-schmidt.de>
+ * @author Jörn Friedrich Dreyer <jfd@butonic.de>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Robin Appelman <icewind@owncloud.com>
+ * @author Robin McCorkell <rmccorkell@karoshi.org.uk>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
+ * @author Tom Needham <tom@owncloud.com>
  *
- * @author Dominik Schmidt
- * @author Artuhr Schiwon
- * @copyright 2011 Dominik Schmidt dev@dominik-schmidt.de
- * @copyright 2012 Arthur Schiwon blizzz@owncloud.com
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE
- * License as published by the Free Software Foundation; either
- * version 3 of the License, or any later version.
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
  *
- * This library is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU AFFERO GENERAL PUBLIC LICENSE for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU Affero General Public
- * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
  *
  */
 
 namespace OCA\user_ldap;
 
 use OCA\user_ldap\lib\BackendUtility;
+use OCA\user_ldap\lib\Access;
 use OCA\user_ldap\lib\user\OfflineUser;
 use OCA\User_LDAP\lib\User\User;
+use OCP\IConfig;
 
-class USER_LDAP extends BackendUtility implements \OCP\UserInterface {
-	/**
-	 * @var string[] $homesToKill
-	 */
+class USER_LDAP extends BackendUtility implements \OCP\IUserBackend, \OCP\UserInterface {
+	/** @var string[] $homesToKill */
 	protected $homesToKill = array();
+
+	/** @var \OCP\IConfig */
+	protected $ocConfig;
+
+	/**
+	 * @param \OCA\user_ldap\lib\Access $access
+	 * @param \OCP\IConfig $ocConfig
+	 */
+	public function __construct(Access $access, IConfig $ocConfig) {
+		parent::__construct($access);
+		$this->ocConfig = $ocConfig;
+	}
 
 	/**
 	 * checks whether the user is allowed to change his avatar in ownCloud
@@ -56,19 +74,15 @@ class USER_LDAP extends BackendUtility implements \OCP\UserInterface {
 	 * Check if the password is correct
 	 * @param string $uid The username
 	 * @param string $password The password
-	 * @return boolean
+	 * @return false|string
 	 *
 	 * Check if the password is correct without logging in the user
 	 */
 	public function checkPassword($uid, $password) {
-		$uid = $this->access->escapeFilterPart($uid);
-
 		//find out dn of the user name
 		$attrs = array($this->access->connection->ldapUserDisplayName, 'dn',
 			'uid', 'samaccountname');
-		$filter = \OCP\Util::mb_str_replace(
-			'%uid', $uid, $this->access->connection->ldapLoginFilter, 'UTF-8');
-		$users = $this->access->fetchListOfUsers($filter, $attrs);
+		$users = $this->access->fetchUsersByLoginName($uid, $attrs);
 		if(count($users) < 1) {
 			return false;
 		}
@@ -106,9 +120,11 @@ class USER_LDAP extends BackendUtility implements \OCP\UserInterface {
 
 	/**
 	 * Get a list of all users
-	 * @return string[] with all uids
 	 *
-	 * Get a list of all users.
+	 * @param string $search
+	 * @param null|int $limit
+	 * @param null|int $offset
+	 * @return string[] an array of all uids
 	 */
 	public function getUsers($search = '', $limit = 10, $offset = 0) {
 		$search = $this->access->escapeFilterPart($search, true);
@@ -211,8 +227,7 @@ class USER_LDAP extends BackendUtility implements \OCP\UserInterface {
 	* @return bool
 	*/
 	public function deleteUser($uid) {
-		$pref = \OC::$server->getConfig();
-		$marked = $pref->getUserValue($uid, 'user_ldap', 'isDeleted', 0);
+		$marked = $this->ocConfig->getUserValue($uid, 'user_ldap', 'isDeleted', 0);
 		if(intval($marked) === 0) {
 			\OC::$server->getLogger()->notice(
 				'User '.$uid . ' is not marked as deleted, not cleaning up.',
@@ -224,9 +239,9 @@ class USER_LDAP extends BackendUtility implements \OCP\UserInterface {
 
 		//Get Home Directory out of user preferences so we can return it later,
 		//necessary for removing directories as done by OC_User.
-		$home = $pref->getUserValue($uid, 'user_ldap', 'homePath', '');
+		$home = $this->ocConfig->getUserValue($uid, 'user_ldap', 'homePath', '');
 		$this->homesToKill[$uid] = $home;
-		$this->access->unmapUser($uid);
+		$this->access->getUserMapper()->unmap($uid);
 
 		return true;
 	}
@@ -251,7 +266,6 @@ class USER_LDAP extends BackendUtility implements \OCP\UserInterface {
 		if($this->access->connection->isCached($cacheKey)) {
 			return $this->access->connection->getFromCache($cacheKey);
 		}
-		$pref = \OC::$server->getConfig();
 		if(strpos($this->access->connection->homeFolderNamingRule, 'attr:') === 0) {
 			$attr = substr($this->access->connection->homeFolderNamingRule, strlen('attr:'));
 			$homedir = $this->access->readAttribute(
@@ -267,13 +281,15 @@ class USER_LDAP extends BackendUtility implements \OCP\UserInterface {
 				) {
 					$homedir = $path;
 				} else {
-					$homedir = \OCP\Config::getSystemValue('datadirectory',
+					$homedir = $this->ocConfig->getSystemValue('datadirectory',
 						\OC::$SERVERROOT.'/data' ) . '/' . $homedir[0];
 				}
 				$this->access->connection->writeToCache($cacheKey, $homedir);
 				//we need it to store it in the DB as well in case a user gets
 				//deleted so we can clean up afterwards
-				$pref->setUserValue($uid, 'user_ldap', 'homePath', $homedir);
+				$this->ocConfig->setUserValue(
+					$uid, 'user_ldap', 'homePath', $homedir
+				);
 				//TODO: if home directory changes, the old one needs to be removed.
 				return $homedir;
 			}
@@ -281,14 +297,14 @@ class USER_LDAP extends BackendUtility implements \OCP\UserInterface {
 
 		//false will apply default behaviour as defined and done by OC_User
 		$this->access->connection->writeToCache($cacheKey, false);
-		$pref->setUserValue($uid, 'user_ldap', 'homePath', '');
+		$this->ocConfig->setUserValue($uid, 'user_ldap', 'homePath', '');
 		return false;
 	}
 
 	/**
 	 * get display name of the user
 	 * @param string $uid user ID of the user
-	 * @return string display name
+	 * @return string|false display name
 	 */
 	public function getDisplayName($uid) {
 		if(!$this->userExists($uid)) {
@@ -314,9 +330,11 @@ class USER_LDAP extends BackendUtility implements \OCP\UserInterface {
 
 	/**
 	 * Get a list of all display names
-	 * @return array with all displayNames (value) and the correspondig uids (key)
 	 *
-	 * Get a list of all display names and user ids.
+	 * @param string $search
+	 * @param string|null $limit
+	 * @param string|null $offset
+	 * @return array an array of all displayNames (value) and the corresponding uids (key)
 	 */
 	public function getDisplayNames($search = '', $limit = null, $offset = null) {
 		$cacheKey = 'getDisplayNames-'.$search.'-'.$limit.'-'.$offset;
@@ -342,11 +360,11 @@ class USER_LDAP extends BackendUtility implements \OCP\UserInterface {
 	* compared with OC_USER_BACKEND_CREATE_USER etc.
 	*/
 	public function implementsActions($actions) {
-		return (bool)((OC_USER_BACKEND_CHECK_PASSWORD
-			| OC_USER_BACKEND_GET_HOME
-			| OC_USER_BACKEND_GET_DISPLAYNAME
-			| OC_USER_BACKEND_PROVIDE_AVATAR
-			| OC_USER_BACKEND_COUNT_USERS)
+		return (bool)((\OC_User_Backend::CHECK_PASSWORD
+			| \OC_User_Backend::GET_HOME
+			| \OC_User_Backend::GET_DISPLAYNAME
+			| \OC_User_Backend::PROVIDE_AVATAR
+			| \OC_User_Backend::COUNT_USERS)
 			& $actions);
 	}
 
@@ -363,8 +381,7 @@ class USER_LDAP extends BackendUtility implements \OCP\UserInterface {
 	 * @return int|bool
 	 */
 	public function countUsers() {
-		$filter = \OCP\Util::mb_str_replace(
-			'%uid', '*', $this->access->connection->ldapLoginFilter, 'UTF-8');
+		$filter = $this->access->getFilterForUserCount();
 		$cacheKey = 'countUsers-'.$filter;
 		if(!is_null($entries = $this->access->connection->getFromCache($cacheKey))) {
 			return $entries;
@@ -373,4 +390,13 @@ class USER_LDAP extends BackendUtility implements \OCP\UserInterface {
 		$this->access->connection->writeToCache($cacheKey, $entries);
 		return $entries;
 	}
+
+	/**
+	 * Backend name to be shown in user management
+	 * @return string the name of the backend to be shown
+	 */
+	public function getBackendName(){
+		return 'LDAP';
+	}
+
 }

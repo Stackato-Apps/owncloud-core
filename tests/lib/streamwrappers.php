@@ -20,7 +20,21 @@
  *
  */
 
-class Test_StreamWrappers extends PHPUnit_Framework_TestCase {
+class Test_StreamWrappers extends \Test\TestCase {
+
+	private static $trashBinStatus;
+
+	public static function setUpBeforeClass() {
+		self::$trashBinStatus = \OC_App::isEnabled('files_trashbin');
+		\OC_App::disable('files_trashbin');
+	}
+
+	public static function tearDownAfterClass() {
+		if (self::$trashBinStatus) {
+			\OC_App::enable('files_trashbin');
+		}
+	}
+
 	public function testFakeDir() {
 		$items = array('foo', 'bar');
 		\OC\Files\Stream\Dir::register('test', $items);
@@ -48,23 +62,18 @@ class Test_StreamWrappers extends PHPUnit_Framework_TestCase {
 		//test callback
 		$tmpFile = OC_Helper::TmpFile('.txt');
 		$file = 'close://' . $tmpFile;
-		\OC\Files\Stream\Close::registerCallback($tmpFile, array('Test_StreamWrappers', 'closeCallBack'));
+		$actual = false;
+		$callback = function($path) use (&$actual) { $actual = $path; };
+		\OC\Files\Stream\Close::registerCallback($tmpFile, $callback);
 		$fh = fopen($file, 'w');
 		fwrite($fh, 'asd');
-		try {
-			fclose($fh);
-			$this->fail('Expected exception');
-		} catch (Exception $e) {
-			$path = $e->getMessage();
-			$this->assertEquals($path, $tmpFile);
-		}
-	}
-
-	public static function closeCallBack($path) {
-		throw new Exception($path);
+		fclose($fh);
+		$this->assertSame($tmpFile, $actual);
 	}
 
 	public function testOC() {
+		// FIXME: use proper tearDown with $this->loginAsUser() and $this->logout()
+		// (would currently break the tests for some reason)
 		$originalStorage = \OC\Files\Filesystem::getStorage('/');
 		\OC\Files\Filesystem::clearMounts();
 

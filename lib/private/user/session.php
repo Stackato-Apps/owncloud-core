@@ -1,10 +1,31 @@
 <?php
-
 /**
- * Copyright (c) 2013 Robin Appelman <icewind@owncloud.com>
- * This file is licensed under the Affero General Public License version 3 or
- * later.
- * See the COPYING-README file.
+ * @author Arthur Schiwon <blizzz@owncloud.com>
+ * @author Bernhard Posselt <dev@bernhard-posselt.com>
+ * @author Joas Schilling <nickvergessen@owncloud.com>
+ * @author Jörn Friedrich Dreyer <jfd@butonic.de>
+ * @author Lukas Reschke <lukas@owncloud.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Robin Appelman <icewind@owncloud.com>
+ * @author Robin McCorkell <rmccorkell@karoshi.org.uk>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
+ * @author Vincent Petry <pvince81@owncloud.com>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
  */
 
 namespace OC\User;
@@ -47,10 +68,10 @@ class Session implements IUserSession, Emitter {
 	protected $activeUser;
 
 	/**
-	 * @param \OC\User\Manager $manager
-	 * @param \OC\Session\Session $session
+	 * @param \OCP\IUserManager $manager
+	 * @param \OCP\ISession $session
 	 */
-	public function __construct($manager, $session) {
+	public function __construct(\OCP\IUserManager $manager, \OCP\ISession $session) {
 		$this->manager = $manager;
 		$this->session = $session;
 	}
@@ -60,7 +81,7 @@ class Session implements IUserSession, Emitter {
 	 * @param string $method
 	 * @param callable $callback
 	 */
-	public function listen($scope, $method, $callback) {
+	public function listen($scope, $method, callable $callback) {
 		$this->manager->listen($scope, $method, $callback);
 	}
 
@@ -69,7 +90,7 @@ class Session implements IUserSession, Emitter {
 	 * @param string $method optional
 	 * @param callable $callback optional
 	 */
-	public function removeListener($scope = null, $method = null, $callback = null) {
+	public function removeListener($scope = null, $method = null, callable $callback = null) {
 		$this->manager->removeListener($scope, $method, $callback);
 	}
 
@@ -83,15 +104,37 @@ class Session implements IUserSession, Emitter {
 	}
 
 	/**
+	 * get the session object
+	 *
+	 * @return \OCP\ISession
+	 */
+	public function getSession() {
+		return $this->session;
+	}
+
+	/**
+	 * set the session object
+	 *
+	 * @param \OCP\ISession $session
+	 */
+	public function setSession(\OCP\ISession $session) {
+		if ($this->session instanceof \OCP\ISession) {
+			$this->session->close();
+		}
+		$this->session = $session;
+		$this->activeUser = null;
+	}
+
+	/**
 	 * set the currently active user
 	 *
 	 * @param \OC\User\User|null $user
 	 */
 	public function setUser($user) {
 		if (is_null($user)) {
-			$this->getSession()->remove('user_id');
+			$this->session->remove('user_id');
 		} else {
-			$this->getSession()->set('user_id', $user->getUID());
+			$this->session->set('user_id', $user->getUID());
 		}
 		$this->activeUser = $user;
 	}
@@ -99,13 +142,18 @@ class Session implements IUserSession, Emitter {
 	/**
 	 * get the current active user
 	 *
-	 * @return \OC\User\User
+	 * @return \OCP\IUser|null Current user, otherwise null
 	 */
 	public function getUser() {
+		// FIXME: This is a quick'n dirty work-around for the incognito mode as
+		// described at https://github.com/owncloud/core/pull/12912#issuecomment-67391155
+		if (\OC_User::isIncognitoMode()) {
+			return null;
+		}
 		if ($this->activeUser) {
 			return $this->activeUser;
 		} else {
-			$uid = $this->getSession()->get('user_id');
+			$uid = $this->session->get('user_id');
 			if ($uid !== null) {
 				$this->activeUser = $this->manager->get($uid);
 				return $this->activeUser;
@@ -116,15 +164,24 @@ class Session implements IUserSession, Emitter {
 	}
 
 	/**
+	 * Checks whether the user is logged in
+	 *
+	 * @return bool if logged in
+	 */
+	public function isLoggedIn() {
+		return $this->getUser() !== null;
+	}
+
+	/**
 	 * set the login name
 	 *
 	 * @param string|null $loginName for the logged in user
 	 */
 	public function setLoginName($loginName) {
 		if (is_null($loginName)) {
-			$this->getSession()->remove('loginname');
+			$this->session->remove('loginname');
 		} else {
-			$this->getSession()->set('loginname', $loginName);
+			$this->session->set('loginname', $loginName);
 		}
 	}
 
@@ -135,12 +192,12 @@ class Session implements IUserSession, Emitter {
 	 */
 	public function getLoginName() {
 		if ($this->activeUser) {
-			return $this->getSession()->get('loginname');
+			return $this->session->get('loginname');
 		} else {
-			$uid = $this->getSession()->get('user_id');
+			$uid = $this->session->get('user_id');
 			if ($uid) {
 				$this->activeUser = $this->manager->get($uid);
-				return $this->getSession()->get('loginname');
+				return $this->session->get('loginname');
 			} else {
 				return null;
 			}
@@ -153,17 +210,22 @@ class Session implements IUserSession, Emitter {
 	 * @param string $uid
 	 * @param string $password
 	 * @return boolean|null
+	 * @throws LoginException
 	 */
 	public function login($uid, $password) {
 		$this->manager->emit('\OC\User', 'preLogin', array($uid, $password));
 		$user = $this->manager->checkPassword($uid, $password);
-		if($user !== false) {
+		if ($user !== false) {
 			if (!is_null($user)) {
 				if ($user->isEnabled()) {
 					$this->setUser($user);
 					$this->setLoginName($uid);
 					$this->manager->emit('\OC\User', 'postLogin', array($user, $password));
-					return true;
+					if ($this->isLoggedIn()) {
+						return true;
+					} else {
+						throw new LoginException('Login canceled by app');
+					}
 				} else {
 					return false;
 				}
@@ -183,21 +245,21 @@ class Session implements IUserSession, Emitter {
 	public function loginWithCookie($uid, $currentToken) {
 		$this->manager->emit('\OC\User', 'preRememberedLogin', array($uid));
 		$user = $this->manager->get($uid);
-		if(is_null($user)) {
+		if (is_null($user)) {
 			// user does not exist
 			return false;
 		}
 
 		// get stored tokens
-		$tokens = \OC_Preferences::getKeys($uid, 'login_token');
+		$tokens = \OC::$server->getConfig()->getUserKeys($uid, 'login_token');
 		// test cookies token against stored tokens
-		if(!in_array($currentToken, $tokens, true)) {
+		if (!in_array($currentToken, $tokens, true)) {
 			return false;
 		}
 		// replace successfully used token with a new one
-		\OC_Preferences::deleteKey($uid, 'login_token', $currentToken);
-		$newToken = \OC_Util::generateRandomBytes(32);
-		\OC_Preferences::setValue($uid, 'login_token', $newToken, time());
+		\OC::$server->getConfig()->deleteUserValue($uid, 'login_token', $currentToken);
+		$newToken = \OC::$server->getSecureRandom()->getMediumStrengthGenerator()->generate(32);
+		\OC::$server->getConfig()->setUserValue($uid, 'login_token', $newToken, time());
 		$this->setMagicInCookie($user->getUID(), $newToken);
 
 		//login
@@ -214,6 +276,7 @@ class Session implements IUserSession, Emitter {
 		$this->setUser(null);
 		$this->setLoginName(null);
 		$this->unsetMagicInCookie();
+		$this->session->clear();
 	}
 
 	/**
@@ -223,44 +286,30 @@ class Session implements IUserSession, Emitter {
 	 * @param string $token
 	 */
 	public function setMagicInCookie($username, $token) {
-		$secure_cookie = \OC_Config::getValue("forcessl", false); //TODO: DI for cookies and OC_Config
+		$secureCookie = \OC::$server->getRequest()->getServerProtocol() === 'https';
 		$expires = time() + \OC_Config::getValue('remember_login_cookie_lifetime', 60 * 60 * 24 * 15);
-		setcookie("oc_username", $username, $expires, \OC::$WEBROOT, '', $secure_cookie);
-		setcookie("oc_token", $token, $expires, \OC::$WEBROOT, '', $secure_cookie, true);
-		setcookie("oc_remember_login", "1", $expires, \OC::$WEBROOT, '', $secure_cookie);
+		setcookie("oc_username", $username, $expires, \OC::$WEBROOT, '', $secureCookie, true);
+		setcookie("oc_token", $token, $expires, \OC::$WEBROOT, '', $secureCookie, true);
+		setcookie("oc_remember_login", "1", $expires, \OC::$WEBROOT, '', $secureCookie, true);
 	}
 
 	/**
 	 * Remove cookie for "remember username"
 	 */
 	public function unsetMagicInCookie() {
+		//TODO: DI for cookies and OC_Config
+		$secureCookie = \OC_Config::getValue('forcessl', false);
+
 		unset($_COOKIE["oc_username"]); //TODO: DI
 		unset($_COOKIE["oc_token"]);
 		unset($_COOKIE["oc_remember_login"]);
-		setcookie('oc_username', '', time()-3600, \OC::$WEBROOT);
-		setcookie('oc_token', '', time()-3600, \OC::$WEBROOT);
-		setcookie('oc_remember_login', '', time()-3600, \OC::$WEBROOT);
+		setcookie('oc_username', '', time() - 3600, \OC::$WEBROOT, '',$secureCookie, true);
+		setcookie('oc_token', '', time() - 3600, \OC::$WEBROOT, '', $secureCookie, true);
+		setcookie('oc_remember_login', '', time() - 3600, \OC::$WEBROOT, '', $secureCookie, true);
 		// old cookies might be stored under /webroot/ instead of /webroot
 		// and Firefox doesn't like it!
-		setcookie('oc_username', '', time()-3600, \OC::$WEBROOT . '/');
-		setcookie('oc_token', '', time()-3600, \OC::$WEBROOT . '/');
-		setcookie('oc_remember_login', '', time()-3600, \OC::$WEBROOT . '/');
-	}
-
-	/**
-	 * will keep the session instance in sync with \OC::$session
-	 * @return \OC\Session\Session
-	 */
-	private function getSession() {
-		//keep $this->session in sync with \OC::$session
-		if ($this->session !== \OC::$session) {
-			\OC::$server->getLogger()->debug(
-				'\OC::$session has been replaced with a new instance. '.
-				'Closing and replacing session in UserSession instance.'
-			);
-			$this->session->close();
-			$this->session = \OC::$session;
-		}
-		return $this->session;
+		setcookie('oc_username', '', time() - 3600, \OC::$WEBROOT . '/', '', $secureCookie, true);
+		setcookie('oc_token', '', time() - 3600, \OC::$WEBROOT . '/', '', $secureCookie, true);
+		setcookie('oc_remember_login', '', time() - 3600, \OC::$WEBROOT . '/', '', $secureCookie, true);
 	}
 }

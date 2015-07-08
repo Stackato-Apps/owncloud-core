@@ -5,7 +5,8 @@
  * See the COPYING-README file.
  */
 
-var $userGroupList;
+var $userGroupList,
+	$sortGroupBy;
 
 var GroupList;
 GroupList = {
@@ -27,11 +28,18 @@ GroupList = {
 	},
 
 	setUserCount: function (groupLiElement, usercount) {
+		if ($sortGroupBy !== 1) {
+			// If we don't sort by group count we dont display them either
+			return;
+		}
+
 		var $groupLiElement = $(groupLiElement);
 		if (usercount === undefined || usercount === 0 || usercount < 0) {
 			usercount = '';
+			$groupLiElement.data('usercount', 0);
+		} else {
+			$groupLiElement.data('usercount', usercount);
 		}
-		$groupLiElement.data('usercount', usercount);
 		$groupLiElement.find('.usercount').text(usercount);
 	},
 
@@ -61,6 +69,33 @@ GroupList = {
 		var lis = $userGroupList.find('.isgroup').get();
 
 		lis.sort(function (a, b) {
+			// "Everyone" always at the top
+			if ($(a).data('gid') === '_everyone') {
+				return -1;
+			} else if ($(b).data('gid') === '_everyone') {
+				return 1;
+			}
+
+			// "admin" always as second
+			if ($(a).data('gid') === 'admin') {
+				return -1;
+			} else if ($(b).data('gid') === 'admin') {
+				return 1;
+			}
+
+			if ($sortGroupBy === 1) {
+				// Sort by user count first
+				var $usersGroupA = $(a).data('usercount'),
+					$usersGroupB = $(b).data('usercount');
+				if ($usersGroupA > 0 && $usersGroupA > $usersGroupB) {
+					return -1;
+				}
+				if ($usersGroupB > 0 && $usersGroupB > $usersGroupA) {
+					return 1;
+				}
+			}
+
+			// Fallback or sort by group name
 			return UserList.alphanum(
 				$(a).find('a span').text(),
 				$(b).find('a span').text()
@@ -82,29 +117,24 @@ GroupList = {
 
 	createGroup: function (groupname) {
 		$.post(
-			OC.filePath('settings', 'ajax', 'creategroup.php'),
+			OC.generateUrl('/settings/users/groups'),
 			{
-				groupname: groupname
+				id: groupname
 			},
 			function (result) {
-				if (result.status !== 'success') {
-					OC.dialogs.alert(result.data.message,
-						t('settings', 'Error creating group'));
-				}
-				else {
-					if (result.data.groupname) {
-						var addedGroup = result.data.groupname;
-						UserList.availableGroups = $.unique($.merge(UserList.availableGroups, [addedGroup]));
-						GroupList.addGroup(result.data.groupname);
+				if (result.groupname) {
+					var addedGroup = result.groupname;
+					UserList.availableGroups = $.unique($.merge(UserList.availableGroups, [addedGroup]));
+					GroupList.addGroup(result.groupname);
 
-						$('.groupsselect, .subadminsselect')
-							.append($('<option>', { value: result.data.groupname })
-								.text(result.data.groupname));
-					}
-					GroupList.toggleAddGroup();
+					$('.groupsselect, .subadminsselect')
+						.append($('<option>', { value: result.groupname })
+							.text(result.groupname));
 				}
-			}
-		);
+				GroupList.toggleAddGroup();
+			}).fail(function(result, textStatus, errorThrown) {
+				OC.dialogs.alert(result.responseJSON.message, t('settings', 'Error creating group'));
+			});
 	},
 
 	update: function () {
@@ -113,10 +143,11 @@ GroupList = {
 		}
 		GroupList.updating = true;
 		$.get(
-			OC.generateUrl('/settings/ajax/grouplist'),
+			OC.generateUrl('/settings/users/groups'),
 			{
 				pattern: filter.getPattern(),
-				filterGroups: filter.filterGroups ? 1 : 0
+				filterGroups: filter.filterGroups ? 1 : 0,
+				sortGroups: $sortGroupBy
 			},
 			function (result) {
 
@@ -185,11 +216,20 @@ GroupList = {
 			$('#newgroup-form').show();
 			$('#newgroup-init').hide();
 			$('#newgroupname').focus();
+			GroupList.handleAddGroupInput('');
 		}
 		else {
 			$('#newgroup-form').hide();
 			$('#newgroup-init').show();
 			$('#newgroupname').val('');
+		}
+	},
+
+	handleAddGroupInput: function (input) {
+		if(input.length) {
+			$('#newgroup-form input[type="submit"]').attr('disabled', null);
+		} else {
+			$('#newgroup-form input[type="submit"]').attr('disabled', 'disabled');
 		}
 	},
 
@@ -219,7 +259,7 @@ GroupList = {
 	},
 	initDeleteHandling: function () {
 		//set up handler
-		GroupDeleteHandler = new DeleteHandler('removegroup.php', 'groupname',
+		GroupDeleteHandler = new DeleteHandler('/settings/users/groups', 'groupname',
 			GroupList.hide, GroupList.remove);
 
 		//configure undo
@@ -265,7 +305,11 @@ GroupList = {
 $(document).ready( function () {
 	$userGroupList = $('#usergrouplist');
 	GroupList.initDeleteHandling();
-	GroupList.getEveryoneCount();
+	$sortGroupBy = $userGroupList.data('sort-groups');
+	if ($sortGroupBy === 1) {
+		// Disabled due to performance issues, when we don't need it for sorting
+		GroupList.getEveryoneCount();
+	}
 
 	// Display or hide of Create Group List Element
 	$('#newgroup-form').hide();
@@ -297,5 +341,9 @@ $(document).ready( function () {
 	// click on group name
 	$userGroupList.on('click', '.isgroup', function () {
 		GroupList.showGroup(GroupList.getElementGID(this));
+	});
+
+	$('#newgroupname').on('input', function(){
+		GroupList.handleAddGroupInput(this.value);
 	});
 });

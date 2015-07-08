@@ -1,27 +1,40 @@
 <?php
-
 /**
- * ownCloud – LDAP Access
+ * @author Alexander Bergolth <leo@strike.wu.ac.at>
+ * @author Andreas Fischer <bantu@owncloud.com>
+ * @author Arthur Schiwon <blizzz@owncloud.com>
+ * @author Bart Visscher <bartv@thisnet.nl>
+ * @author Benjamin Diele <benjamin@diele.be>
+ * @author Christopher Schäpers <kondou@ts.unde.re>
+ * @author Donald Buczek <buczek@molgen.mpg.de>
+ * @author Jörn Friedrich Dreyer <jfd@butonic.de>
+ * @author Lorenzo M. Catucci <lorenzo@sancho.ccd.uniroma2.it>
+ * @author Lukas Reschke <lukas@owncloud.com>
+ * @author Lyonel Vincent <lyonel@ezix.org>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Robin McCorkell <rmccorkell@karoshi.org.uk>
+ * @author Scrutinizer Auto-Fixer <auto-fixer@scrutinizer-ci.com>
  *
- * @author Arthur Schiwon
- * @copyright 2012, 2013 Arthur Schiwon blizzz@owncloud.com
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE
- * License as published by the Free Software Foundation; either
- * version 3 of the License, or any later version.
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
  *
- * This library is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU AFFERO GENERAL PUBLIC LICENSE for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU Affero General Public
- * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
  *
  */
 
 namespace OCA\user_ldap\lib;
+
+use OCA\User_LDAP\Mapping\AbstractMapping;
 
 /**
  * Class Access
@@ -47,12 +60,62 @@ class Access extends LDAPUtility implements user\IUserTools {
 	 */
 	protected $lastCookie = '';
 
+	/**
+	 * @var AbstractMapping $userMapper
+	 */
+	protected $userMapper;
+
+	/**
+	* @var AbstractMapping $userMapper
+	*/
+	protected $groupMapper;
+
 	public function __construct(Connection $connection, ILDAPWrapper $ldap,
 		user\Manager $userManager) {
 		parent::__construct($ldap);
 		$this->connection = $connection;
 		$this->userManager = $userManager;
 		$this->userManager->setLdapAccess($this);
+	}
+
+	/**
+	 * sets the User Mapper
+	 * @param AbstractMapping $mapper
+	 */
+	public function setUserMapper(AbstractMapping $mapper) {
+		$this->userMapper = $mapper;
+	}
+
+	/**
+	 * returns the User Mapper
+	 * @throws \Exception
+	 * @return AbstractMapping
+	 */
+	public function getUserMapper() {
+		if(is_null($this->userMapper)) {
+			throw new \Exception('UserMapper was not assigned to this Access instance.');
+		}
+		return $this->userMapper;
+	}
+
+	/**
+	 * sets the Group Mapper
+	 * @param AbstractMapping $mapper
+	 */
+	public function setGroupMapper(AbstractMapping $mapper) {
+		$this->groupMapper = $mapper;
+	}
+
+	/**
+	 * returns the Group Mapper
+	 * @throws \Exception
+	 * @return AbstractMapping
+	 */
+	public function getGroupMapper() {
+		if(is_null($this->groupMapper)) {
+			throw new \Exception('GroupMapper was not assigned to this Access instance.');
+		}
+		return $this->groupMapper;
 	}
 
 	/**
@@ -240,100 +303,64 @@ class Access extends LDAPUtility implements user\IUserTools {
 	}
 
 	/**
-	 * gives back the database table for the query
-	 * @param bool $isUser
-	 * @return string
-	 */
-	private function getMapTable($isUser) {
-		if($isUser) {
-			return '*PREFIX*ldap_user_mapping';
-		} else {
-			return '*PREFIX*ldap_group_mapping';
-		}
-	}
-
-	/**
 	 * returns the LDAP DN for the given internal ownCloud name of the group
 	 * @param string $name the ownCloud name in question
-	 * @return string with the LDAP DN on success, otherwise false
+	 * @return string|false LDAP DN on success, otherwise false
 	 */
 	public function groupname2dn($name) {
-		$dn = $this->ocname2dn($name, false);
-
-		if($dn) {
-			return $dn;
-		}
-
-		return false;
+		return $this->groupMapper->getDNbyName($name);
 	}
 
 	/**
 	 * returns the LDAP DN for the given internal ownCloud name of the user
 	 * @param string $name the ownCloud name in question
-	 * @return string with the LDAP DN on success, otherwise false
+	 * @return string|false with the LDAP DN on success, otherwise false
 	 */
 	public function username2dn($name) {
-		$dn = $this->ocname2dn($name, true);
+		$fdn = $this->userMapper->getDNbyName($name);
+
 		//Check whether the DN belongs to the Base, to avoid issues on multi-
 		//server setups
-		if($dn && $this->isDNPartOfBase($dn, $this->connection->ldapBaseUsers)) {
-			return $dn;
+		if(is_string($fdn) && $this->isDNPartOfBase($fdn, $this->connection->ldapBaseUsers)) {
+			return $fdn;
 		}
 
 		return false;
 	}
 
 	/**
-	 * returns the LDAP DN for the given internal ownCloud name
-	 * @param string $name the ownCloud name in question
-	 * @param boolean $isUser is it a user? otherwise group
-	 * @return string with the LDAP DN on success, otherwise false
-	 */
 	public function ocname2dn($name, $isUser) {
-		$table = $this->getMapTable($isUser);
-
-		$query = \OCP\DB::prepare('
-			SELECT `ldap_dn`
-			FROM `'.$table.'`
-			WHERE `owncloud_name` = ?
-		');
-
-		$record = $query->execute(array($name))->fetchOne();
-		return $record;
-	}
-
-	/**
 	 * returns the internal ownCloud name for the given LDAP DN of the group, false on DN outside of search DN or failure
-	 * @param string $dn the dn of the group object
+	 * @param string $fdn the dn of the group object
 	 * @param string $ldapName optional, the display name of the object
-	 * @return string with the name to use in ownCloud, false on DN outside of search DN
+	 * @return string|false with the name to use in ownCloud, false on DN outside of search DN
 	 */
-	public function dn2groupname($dn, $ldapName = null) {
+	public function dn2groupname($fdn, $ldapName = null) {
 		//To avoid bypassing the base DN settings under certain circumstances
 		//with the group support, check whether the provided DN matches one of
 		//the given Bases
-		if(!$this->isDNPartOfBase($dn, $this->connection->ldapBaseGroups)) {
+		if(!$this->isDNPartOfBase($fdn, $this->connection->ldapBaseGroups)) {
 			return false;
 		}
 
-		return $this->dn2ocname($dn, $ldapName, false);
+		return $this->dn2ocname($fdn, $ldapName, false);
 	}
 
 	/**
 	 * returns the internal ownCloud name for the given LDAP DN of the user, false on DN outside of search DN or failure
 	 * @param string $dn the dn of the user object
 	 * @param string $ldapName optional, the display name of the object
-	 * @return string with with the name to use in ownCloud
+	 * @return string|false with with the name to use in ownCloud
 	 */
-	public function dn2username($dn, $ldapName = null) {
+	public function dn2username($fdn, $ldapName = null) {
 		//To avoid bypassing the base DN settings under certain circumstances
 		//with the group support, check whether the provided DN matches one of
 		//the given Bases
-		if(!$this->isDNPartOfBase($dn, $this->connection->ldapBaseUsers)) {
+		if(!$this->isDNPartOfBase($fdn, $this->connection->ldapBaseUsers)) {
 			return false;
 		}
 
-		return $this->dn2ocname($dn, $ldapName, true);
+		return $this->dn2ocname($fdn, $ldapName, true);
 	}
 
 	/**
@@ -341,52 +368,41 @@ class Access extends LDAPUtility implements user\IUserTools {
 	 * @param string $dn the dn of the user object
 	 * @param string $ldapName optional, the display name of the object
 	 * @param bool $isUser optional, whether it is a user object (otherwise group assumed)
-	 * @return string with with the name to use in ownCloud
+	 * @return string|false with with the name to use in ownCloud
 	 */
-	public function dn2ocname($dn, $ldapName = null, $isUser = true) {
-		$table = $this->getMapTable($isUser);
+	public function dn2ocname($fdn, $ldapName = null, $isUser = true) {
 		if($isUser) {
-			$fncFindMappedName = 'findMappedUser';
+			$mapper = $this->getUserMapper();
 			$nameAttribute = $this->connection->ldapUserDisplayName;
 		} else {
-			$fncFindMappedName = 'findMappedGroup';
+			$mapper = $this->getGroupMapper();
 			$nameAttribute = $this->connection->ldapGroupDisplayName;
 		}
 
 		//let's try to retrieve the ownCloud name from the mappings table
-		$ocName = $this->$fncFindMappedName($dn);
-		if($ocName) {
+		$ocName = $mapper->getNameByDN($fdn);
+		if(is_string($ocName)) {
 			return $ocName;
 		}
 
 		//second try: get the UUID and check if it is known. Then, update the DN and return the name.
-		$uuid = $this->getUUID($dn, $isUser);
-		if($uuid) {
-			$query = \OCP\DB::prepare('
-				SELECT `owncloud_name`
-				FROM `'.$table.'`
-				WHERE `directory_uuid` = ?
-			');
-			$component = $query->execute(array($uuid))->fetchOne();
-			if($component) {
-				$query = \OCP\DB::prepare('
-					UPDATE `'.$table.'`
-					SET `ldap_dn` = ?
-					WHERE `directory_uuid` = ?
-				');
-				$query->execute(array($dn, $uuid));
-				return $component;
+		$uuid = $this->getUUID($fdn, $isUser);
+		if(is_string($uuid)) {
+			$ocName = $mapper->getNameByUUID($uuid);
+			if(is_string($ocName)) {
+				$mapper->setDNbyUUID($fdn, $uuid);
+				return $ocName;
 			}
 		} else {
 			//If the UUID can't be detected something is foul.
-			\OCP\Util::writeLog('user_ldap', 'Cannot determine UUID for '.$dn.'. Skipping.', \OCP\Util::INFO);
+			\OCP\Util::writeLog('user_ldap', 'Cannot determine UUID for '.$fdn.'. Skipping.', \OCP\Util::INFO);
 			return false;
 		}
 
 		if(is_null($ldapName)) {
-			$ldapName = $this->readAttribute($dn, $nameAttribute);
+			$ldapName = $this->readAttribute($fdn, $nameAttribute);
 			if(!isset($ldapName[0]) && empty($ldapName[0])) {
-				\OCP\Util::writeLog('user_ldap', 'No or empty name for '.$dn.'.', \OCP\Util::INFO);
+				\OCP\Util::writeLog('user_ldap', 'No or empty name for '.$fdn.'.', \OCP\Util::INFO);
 				return false;
 			}
 			$ldapName = $ldapName[0];
@@ -394,8 +410,8 @@ class Access extends LDAPUtility implements user\IUserTools {
 
 		if($isUser) {
 			$usernameAttribute = $this->connection->ldapExpertUsernameAttr;
-			if(!emptY($usernameAttribute)) {
-				$username = $this->readAttribute($dn, $usernameAttribute);
+			if(!empty($usernameAttribute)) {
+				$username = $this->readAttribute($fdn, $usernameAttribute);
 				$username = $username[0];
 			} else {
 				$username = $uuid;
@@ -413,7 +429,7 @@ class Access extends LDAPUtility implements user\IUserTools {
 		$this->connection->setConfiguration(array('ldapCacheTTL' => 0));
 		if(($isUser && !\OCP\User::userExists($intName))
 			|| (!$isUser && !\OC_Group::groupExists($intName))) {
-			if($this->mapComponent($dn, $intName, $isUser)) {
+			if($mapper->map($fdn, $intName, $uuid)) {
 				$this->connection->setConfiguration(array('ldapCacheTTL' => $originalTTL));
 				return $intName;
 			}
@@ -421,12 +437,12 @@ class Access extends LDAPUtility implements user\IUserTools {
 		$this->connection->setConfiguration(array('ldapCacheTTL' => $originalTTL));
 
 		$altName = $this->createAltInternalOwnCloudName($intName, $isUser);
-		if($this->mapComponent($dn, $altName, $isUser)) {
+		if(is_string($altName) && $mapper->map($fdn, $altName, $uuid)) {
 			return $altName;
 		}
 
 		//if everything else did not help..
-		\OCP\Util::writeLog('user_ldap', 'Could not create unique name for '.$dn.'.', \OCP\Util::INFO);
+		\OCP\Util::writeLog('user_ldap', 'Could not create unique name for '.$fdn.'.', \OCP\Util::INFO);
 		return false;
 	}
 
@@ -450,46 +466,6 @@ class Access extends LDAPUtility implements user\IUserTools {
 	 */
 	public function ownCloudGroupNames($ldapGroups) {
 		return $this->ldap2ownCloudNames($ldapGroups, false);
-	}
-
-	/**
-	 * @param string $dn
-	 * @return bool|string
-	 */
-	private function findMappedUser($dn) {
-		static $query = null;
-		if(is_null($query)) {
-			$query = \OCP\DB::prepare('
-				SELECT `owncloud_name`
-				FROM `'.$this->getMapTable(true).'`
-				WHERE `ldap_dn` = ?'
-			);
-		}
-		$res = $query->execute(array($dn))->fetchOne();
-		if($res) {
-			return  $res;
-		}
-		return false;
-	}
-
-	/**
-	 * @param string $dn
-	 * @return bool|string
-	 */
-	private function findMappedGroup($dn) {
-		static $query = null;
-		if(is_null($query)) {
-			$query = \OCP\DB::prepare('
-					SELECT `owncloud_name`
-					FROM `'.$this->getMapTable(false).'`
-					WHERE `ldap_dn` = ?'
-			);
-		}
-		$res = $query->execute(array($dn))->fetchOne();
-		if($res) {
-			return  $res;
-		}
-		return false;
 	}
 
 	/**
@@ -543,7 +519,7 @@ class Access extends LDAPUtility implements user\IUserTools {
 	/**
 	 * creates a unique name for internal ownCloud use for users. Don't call it directly.
 	 * @param string $name the display name of the object
-	 * @return string with with the name to use in ownCloud or false if unsuccessful
+	 * @return string|false with with the name to use in ownCloud or false if unsuccessful
 	 *
 	 * Instead of using this method directly, call
 	 * createAltInternalOwnCloudName($name, true)
@@ -565,7 +541,7 @@ class Access extends LDAPUtility implements user\IUserTools {
 	/**
 	 * creates a unique name for internal ownCloud use for groups. Don't call it directly.
 	 * @param string $name the display name of the object
-	 * @return string with with the name to use in ownCloud or false if unsuccessful.
+	 * @return string|false with with the name to use in ownCloud or false if unsuccessful.
 	 *
 	 * Instead of using this method directly, call
 	 * createAltInternalOwnCloudName($name, false)
@@ -575,17 +551,7 @@ class Access extends LDAPUtility implements user\IUserTools {
 	 * "Developers"
 	 */
 	private function _createAltInternalOwnCloudNameForGroups($name) {
-		$query = \OCP\DB::prepare('
-			SELECT `owncloud_name`
-			FROM `'.$this->getMapTable(false).'`
-			WHERE `owncloud_name` LIKE ?
-		');
-
-		$usedNames = array();
-		$res = $query->execute(array($name.'_%'));
-		while($row = $res->fetchRow()) {
-			$usedNames[] = $row['owncloud_name'];
-		}
+		$usedNames = $this->groupMapper->getNamesBySearch($name.'_%');
 		if(!($usedNames) || count($usedNames) === 0) {
 			$lastNo = 1; //will become name_2
 		} else {
@@ -614,7 +580,7 @@ class Access extends LDAPUtility implements user\IUserTools {
 	 * creates a unique name for internal ownCloud use.
 	 * @param string $name the display name of the object
 	 * @param boolean $isUser whether name should be created for a user (true) or a group (false)
-	 * @return string with with the name to use in ownCloud or false if unsuccessful
+	 * @return string|false with with the name to use in ownCloud or false if unsuccessful
 	 */
 	private function createAltInternalOwnCloudName($name, $isUser) {
 		$originalTTL = $this->connection->ldapCacheTTL;
@@ -630,70 +596,19 @@ class Access extends LDAPUtility implements user\IUserTools {
 	}
 
 	/**
-	 * removes a user from the mappings table
-	 * @param string $ocName
-	 */
-	public function unmapUser($ocName) {
-		$table = $this->getMapTable(true);
-		$delete = \OCP\DB::prepare('
-			DELETE FROM `' . $table . '`
-			WHERE `owncloud_name` = ?
-		');
-		$delete->execute(array($ocName));
-	}
-
-	/**
-	 * inserts a new user or group into the mappings table
-	 * @param string $dn the record in question
-	 * @param string $ocName the name to use in ownCloud
-	 * @param bool $isUser is it a user or a group?
-	 * @return bool true on success, false otherwise
+	 * fetches a list of users according to a provided loginName and utilizing
+	 * the login filter.
 	 *
-	 * inserts a new user or group into the mappings table
+	 * @param string $loginName
+	 * @param array $attributes optional, list of attributes to read
+	 * @return array
 	 */
-	private function mapComponent($dn, $ocName, $isUser = true) {
-		$table = $this->getMapTable($isUser);
-
-		$sqlAdjustment = '';
-		$dbType = \OCP\Config::getSystemValue('dbtype');
-		if($dbType === 'mysql' || $dbType == 'oci') {
-			$sqlAdjustment = 'FROM DUAL';
-		}
-
-		$insert = \OCP\DB::prepare('
-			INSERT INTO `'.$table.'` (`ldap_dn`, `owncloud_name`, `directory_uuid`)
-				SELECT ?,?,?
-				'.$sqlAdjustment.'
-				WHERE NOT EXISTS (
-					SELECT 1
-					FROM `'.$table.'`
-					WHERE `ldap_dn` = ?
-						OR `owncloud_name` = ?)
-		');
-
-		//feed the DB
-		$insRows = $insert->execute(array($dn, $ocName,
-										  $this->getUUID($dn, $isUser), $dn,
-										  $ocName));
-
-		if(\OCP\DB::isError($insRows)) {
-			return false;
-		}
-
-		if($insRows === 0) {
-			return false;
-		}
-
-		if($isUser) {
-			//make sure that email address is retrieved prior to login, so user
-			//will be notified when something is shared with him
-			$user = $this->userManager->get($ocName);
-			if($user instanceof user\User) {
-				$user->update();
-			}
-		}
-
-		return true;
+	public function fetchUsersByLoginName($loginName, $attributes = array('dn')) {
+		$loginName = $this->escapeFilterPart($loginName);
+		$filter = \OCP\Util::mb_str_replace(
+			'%uid', $loginName, $this->connection->ldapLoginFilter, 'UTF-8');
+		$users = $this->fetchListOfUsers($filter, $attributes);
+		return $users;
 	}
 
 	/**
@@ -788,6 +703,17 @@ class Access extends LDAPUtility implements user\IUserTools {
 	}
 
 	/**
+	 * returns the number of available objects on the base DN
+	 *
+	 * @param int|null $limit
+	 * @param int|null $offset
+	 * @return int|bool
+	 */
+	public function countObjects($limit = null, $offset = null) {
+		return $this->count('objectclass=*', $this->connection->ldapBase, array('dn'), $limit, $offset);
+	}
+
+	/**
 	 * retrieved. Results will according to the order in the array.
 	 * @param int $limit optional, maximum results to be counted
 	 * @param int $offset optional, a starting point
@@ -809,7 +735,7 @@ class Access extends LDAPUtility implements user\IUserTools {
 		}
 
 		//check whether paged search should be attempted
-		$pagedSearchOK = $this->initPagedSearch($filter, $base, $attr, $limit, $offset);
+		$pagedSearchOK = $this->initPagedSearch($filter, $base, $attr, intval($limit), $offset);
 
 		$linkResources = array_pad(array(), count($base), $cr);
 		$sr = $this->ldap->search($linkResources, $base, $filter, $attr);
@@ -883,8 +809,9 @@ class Access extends LDAPUtility implements user\IUserTools {
 	private function count($filter, $base, $attr = null, $limit = null, $offset = null, $skipHandling = false) {
 		\OCP\Util::writeLog('user_ldap', 'Count filter:  '.print_r($filter, true), \OCP\Util::DEBUG);
 
-		if(is_null($limit) || $limit <= 0) {
-			$limit = intval($this->connection->ldapPagingSize);
+		$limitPerPage = intval($this->connection->ldapPagingSize);
+		if(!is_null($limit) && $limit < $limitPerPage && $limit > 0) {
+			$limitPerPage = $limit;
 		}
 
 		$counter = 0;
@@ -894,19 +821,19 @@ class Access extends LDAPUtility implements user\IUserTools {
 		do {
 			$continue = false;
 			$search = $this->executeSearch($filter, $base, $attr,
-										   $limit, $offset);
+										   $limitPerPage, $offset);
 			if($search === false) {
 				return $counter > 0 ? $counter : false;
 			}
 			list($sr, $pagedSearchOK) = $search;
 
-			$count = $this->countEntriesInSearchResults($sr, $limit, $continue);
+			$count = $this->countEntriesInSearchResults($sr, $limitPerPage, $continue);
 			$counter += $count;
 
-			$this->processPagedSearchStatus($sr, $filter, $base, $count, $limit,
+			$this->processPagedSearchStatus($sr, $filter, $base, $count, $limitPerPage,
 										$offset, $pagedSearchOK, $skipHandling);
-			$offset += $limit;
-		} while($continue);
+			$offset += $limitPerPage;
+		} while($continue && (is_null($limit) || $limit <= 0 || $limit > $counter));
 
 		return $counter;
 	}
@@ -1209,6 +1136,19 @@ class Access extends LDAPUtility implements user\IUserTools {
 	}
 
 	/**
+	 * returns the filter used for counting users
+	 * @return string
+	 */
+	public function getFilterForUserCount() {
+		$filter = $this->combineFilterWithAnd(array(
+			$this->connection->ldapUserFilter,
+			$this->connection->ldapUserDisplayName . '=*'
+		));
+
+		return $filter;
+	}
+
+	/**
 	 * @param string $name
 	 * @param string $password
 	 * @return bool
@@ -1276,7 +1216,7 @@ class Access extends LDAPUtility implements user\IUserTools {
 	/**
 	 * @param string $dn
 	 * @param bool $isUser
-	 * @return array|bool|false
+	 * @return string|bool
 	 */
 	public function getUUID($dn, $isUser = true) {
 		if($isUser) {
@@ -1499,7 +1439,7 @@ class Access extends LDAPUtility implements user\IUserTools {
 	 */
 	private function initPagedSearch($filter, $bases, $attr, $limit, $offset) {
 		$pagedSearchOK = false;
-		if($this->connection->hasPagedResultSupport && !is_null($limit)) {
+		if($this->connection->hasPagedResultSupport && ($limit !== 0)) {
 			$offset = intval($offset); //can be null
 			\OCP\Util::writeLog('user_ldap',
 				'initializing paged search for  Filter '.$filter.' base '.print_r($bases, true)
@@ -1536,7 +1476,7 @@ class Access extends LDAPUtility implements user\IUserTools {
 					if(!$pagedSearchOK) {
 						return false;
 					}
-					\OCP\Util::writeLog('user_ldap', 'Ready for a paged search', \OCP\Util::INFO);
+					\OCP\Util::writeLog('user_ldap', 'Ready for a paged search', \OCP\Util::DEBUG);
 				} else {
 					\OCP\Util::writeLog('user_ldap',
 						'No paged search for us, Cpt., Limit '.$limit.' Offset '.$offset,
@@ -1544,7 +1484,7 @@ class Access extends LDAPUtility implements user\IUserTools {
 				}
 
 			}
-		} else if($this->connection->hasPagedResultSupport && intval($limit) === 0) {
+		} else if($this->connection->hasPagedResultSupport && $limit === 0) {
 			// a search without limit was requested. However, if we do use
 			// Paged Search once, we always must do it. This requires us to
 			// initialize it with the configured page size.

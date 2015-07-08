@@ -1,76 +1,106 @@
 <?php
 /**
- * Copyright (c) 2012 Bart Visscher <bartv@thisnet.nl>
- * This file is licensed under the Affero General Public License version 3 or
- * later.
- * See the COPYING-README file.
+ * @author Bernhard Posselt <dev@bernhard-posselt.com>
+ * @author Björn Schießle <schiessle@owncloud.com>
+ * @author Lukas Reschke <lukas@owncloud.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
+ * @author Victor Dubiniuk <dubiniuk@owncloud.com>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
  */
 
 namespace OC\Core\LostPassword\Controller;
 
 use \OCP\AppFramework\Controller;
-use \OCP\AppFramework\Http\JSONResponse;
 use \OCP\AppFramework\Http\TemplateResponse;
 use \OCP\IURLGenerator;
 use \OCP\IRequest;
 use \OCP\IL10N;
 use \OCP\IConfig;
-use \OCP\IUserSession;
-use \OC\Core\LostPassword\EncryptedDataException;
+use OCP\IUserManager;
+use OCP\Mail\IMailer;
+use OCP\Security\ISecureRandom;
+use \OC_Defaults;
+use OCP\Security\StringUtils;
 
+/**
+ * Class LostController
+ *
+ * Successfully changing a password will emit the post_passwordReset hook.
+ *
+ * @package OC\Core\LostPassword\Controller
+ */
 class LostController extends Controller {
 
-	/**
-	 * @var \OCP\IURLGenerator
-	 */
+	/** @var IURLGenerator */
 	protected $urlGenerator;
-
-	/**
-	 * @var \OCP\IUserManager
-	 */
+	/** @var IUserManager */
 	protected $userManager;
-
-	/**
-	 * @var \OC_Defaults
-	 */
+	// FIXME: Inject a non-static factory of OC_Defaults for better unit-testing
+	/** @var OC_Defaults */
 	protected $defaults;
-
-	/**
-	 * @var IL10N
-	 */
+	/** @var IL10N */
 	protected $l10n;
+	/** @var string */
 	protected $from;
+	/** @var bool */
 	protected $isDataEncrypted;
-
-	/**
-	 * @var IConfig
-	 */
+	/** @var IConfig */
 	protected $config;
+	/** @var ISecureRandom */
+	protected $secureRandom;
+	/** @var IMailer */
+	protected $mailer;
 
 	/**
-	 * @var IUserSession
+	 * @param string $appName
+	 * @param IRequest $request
+	 * @param IURLGenerator $urlGenerator
+	 * @param IUserManager $userManager
+	 * @param OC_Defaults $defaults
+	 * @param IL10N $l10n
+	 * @param IConfig $config
+	 * @param ISecureRandom $secureRandom
+	 * @param string $from
+	 * @param string $isDataEncrypted
+	 * @param IMailer $mailer
 	 */
-	protected $userSession;
-
 	public function __construct($appName,
-	                            IRequest $request,
-	                            IURLGenerator $urlGenerator,
-	                            $userManager,
-	                            $defaults,
-	                            IL10N $l10n,
-	                            IConfig $config,
-	                            IUserSession $userSession,
-	                            $from,
-	                            $isDataEncrypted) {
+								IRequest $request,
+								IURLGenerator $urlGenerator,
+								IUserManager $userManager,
+								OC_Defaults $defaults,
+								IL10N $l10n,
+								IConfig $config,
+								ISecureRandom $secureRandom,
+								$from,
+								$isDataEncrypted,
+								IMailer $mailer) {
 		parent::__construct($appName, $request);
 		$this->urlGenerator = $urlGenerator;
 		$this->userManager = $userManager;
 		$this->defaults = $defaults;
 		$this->l10n = $l10n;
+		$this->secureRandom = $secureRandom;
 		$this->from = $from;
 		$this->isDataEncrypted = $isDataEncrypted;
 		$this->config = $config;
-		$this->userSession = $userSession;
+		$this->mailer = $mailer;
 	}
 
 	/**
@@ -81,23 +111,31 @@ class LostController extends Controller {
 	 *
 	 * @param string $token
 	 * @param string $userId
+	 * @return TemplateResponse
 	 */
 	public function resetform($token, $userId) {
 		return new TemplateResponse(
 			'core/lostpassword',
 			'resetpassword',
 			array(
-				'isEncrypted' => $this->isDataEncrypted,
-				'link' => $this->getLink('core.lost.setPassword', $userId, $token),
+				'link' => $this->urlGenerator->linkToRouteAbsolute('core.lost.setPassword', array('userId' => $userId, 'token' => $token)),
 			),
 			'guest'
 		);
 	}
 
+	/**
+	 * @param $message
+	 * @param array $additional
+	 * @return array
+	 */
 	private function error($message, array $additional=array()) {
 		return array_merge(array('status' => 'error', 'msg' => $message), $additional);
 	}
 
+	/**
+	 * @return array
+	 */
 	private function success() {
 		return array('status'=>'success');
 	}
@@ -106,14 +144,12 @@ class LostController extends Controller {
 	 * @PublicPage
 	 *
 	 * @param string $user
-	 * @param bool $proceed
+	 * @return array
 	 */
-	public function email($user, $proceed){
+	public function email($user){
 		// FIXME: use HTTP error codes
 		try {
-			$this->sendEmail($user, $proceed);
-		} catch (EncryptedDataException $e){
-			return $this->error('', array('encryption' => '1'));
+			$this->sendEmail($user);
 		} catch (\Exception $e){
 			return $this->error($e->getMessage());
 		}
@@ -121,15 +157,23 @@ class LostController extends Controller {
 		return $this->success();
 	}
 
-
 	/**
 	 * @PublicPage
+	 * @param string $token
+	 * @param string $userId
+	 * @param string $password
+	 * @param boolean $proceed
+	 * @return array
 	 */
-	public function setPassword($token, $userId, $password) {
+	public function setPassword($token, $userId, $password, $proceed) {
+		if ($this->isDataEncrypted && !$proceed) {
+			return $this->error('', array('encryption' => true));
+		}
+
 		try {
 			$user = $this->userManager->get($userId);
 
-			if (!$this->checkToken($userId, $token)) {
+			if (!StringUtils::equals($this->config->getUserValue($userId, 'owncloud', 'lostpassword', null), $token)) {
 				throw new \Exception($this->l10n->t('Couldn\'t reset password because the token is invalid'));
 			}
 
@@ -137,9 +181,10 @@ class LostController extends Controller {
 				throw new \Exception();
 			}
 
-			// FIXME: should be added to the all config at some point
-			\OC_Preferences::deleteKey($userId, 'owncloud', 'lostpassword');
-			$this->userSession->unsetMagicInCookie();
+			\OC_Hook::emit('\OC\Core\LostPassword\Controller\LostController', 'post_passwordReset', array('uid' => $userId, 'password' => $password));
+
+			$this->config->deleteUserValue($userId, 'owncloud', 'lostpassword');
+			@\OC_User::unsetMagicInCookie();
 
 		} catch (\Exception $e){
 			return $this->error($e->getMessage());
@@ -148,75 +193,49 @@ class LostController extends Controller {
 		return $this->success();
 	}
 
-
-	protected function sendEmail($user, $proceed) {
-		if ($this->isDataEncrypted && !$proceed){
-			throw new EncryptedDataException();
-		}
-
+	/**
+	 * @param string $user
+	 * @throws \Exception
+	 */
+	protected function sendEmail($user) {
 		if (!$this->userManager->userExists($user)) {
-			throw new \Exception(
-				$this->l10n->t('Couldn\'t send reset email. Please make sure '.
-				               'your username is correct.'));
+			throw new \Exception($this->l10n->t('Couldn\'t send reset email. Please make sure your username is correct.'));
 		}
-
-		$token = hash('sha256', \OC_Util::generateRandomBytes(30));
-
-		// Hash the token again to prevent timing attacks
-		$this->config->setUserValue(
-			$user, 'owncloud', 'lostpassword', hash('sha256', $token)
-		);
 
 		$email = $this->config->getUserValue($user, 'settings', 'email');
 
 		if (empty($email)) {
 			throw new \Exception(
 				$this->l10n->t('Couldn\'t send reset email because there is no '.
-				               'email address for this username. Please ' .
-				               'contact your administrator.')
+					'email address for this username. Please ' .
+					'contact your administrator.')
 			);
 		}
 
-		$link = $this->getLink('core.lost.resetform', $user, $token);
+		$token = $this->secureRandom->getMediumStrengthGenerator()->generate(21,
+			ISecureRandom::CHAR_DIGITS.
+			ISecureRandom::CHAR_LOWER.
+			ISecureRandom::CHAR_UPPER);
+		$this->config->setUserValue($user, 'owncloud', 'lostpassword', $token);
+
+		$link = $this->urlGenerator->linkToRouteAbsolute('core.lost.resetform', array('userId' => $user, 'token' => $token));
 
 		$tmpl = new \OC_Template('core/lostpassword', 'email');
 		$tmpl->assign('link', $link, false);
 		$msg = $tmpl->fetchPage();
 
 		try {
-			// FIXME: should be added to the container and injected in here
-			\OC_Mail::send(
-				$email,
-				$user,
-				$this->l10n->t('%s password reset',	array($this->defaults->getName())),
-				$msg,
-				$this->from,
-				$this->defaults->getName()
-			);
+			$message = $this->mailer->createMessage();
+			$message->setTo([$email => $user]);
+			$message->setSubject($this->l10n->t('%s password reset', [$this->defaults->getName()]));
+			$message->setPlainBody($msg);
+			$message->setFrom([$this->from => $this->defaults->getName()]);
+			$this->mailer->send($message);
 		} catch (\Exception $e) {
 			throw new \Exception($this->l10n->t(
 				'Couldn\'t send reset email. Please contact your administrator.'
 			));
 		}
 	}
-
-
-	protected function getLink($route, $user, $token){
-		$parameters = array(
-			'token' => $token,
-			'userId' => $user
-		);
-		$link = $this->urlGenerator->linkToRoute($route, $parameters);
-
-		return $this->urlGenerator->getAbsoluteUrl($link);
-	}
-
-
-	protected function checkToken($user, $token) {
-		return $this->config->getUserValue(
-			$user, 'owncloud', 'lostpassword'
-		) === hash('sha256', $token);
-	}
-
 
 }

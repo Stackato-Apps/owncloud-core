@@ -1,24 +1,29 @@
 <?php
 /**
-* ownCloud
-*
-* @author Bjoern Schiessle, Michael Gapczynski
-* @copyright 2012 Michael Gapczynski <mtgap@owncloud.com>
- *           2014 Bjoern Schiessle <schiessle@owncloud.com>
-*
-* This library is free software; you can redistribute it and/or
-* modify it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE
-* License as published by the Free Software Foundation; either
-* version 3 of the License, or any later version.
-*
-* This library is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU AFFERO GENERAL PUBLIC LICENSE for more details.
-*
-* You should have received a copy of the GNU Affero General Public
-* License along with this library.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ * @author Andreas Fischer <bantu@owncloud.com>
+ * @author Bart Visscher <bartv@thisnet.nl>
+ * @author Björn Schießle <schiessle@owncloud.com>
+ * @author Michael Gapczynski <GapczynskiM@gmail.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
+ * @author Vincent Petry <pvince81@owncloud.com>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
+ */
 
 class OC_Share_Backend_File implements OCP\Share_Backend_File_Dependent {
 
@@ -96,12 +101,13 @@ class OC_Share_Backend_File implements OCP\Share_Backend_File_Dependent {
 	public function formatItems($items, $format, $parameters = null) {
 		if ($format == self::FORMAT_SHARED_STORAGE) {
 			// Only 1 item should come through for this format call
+			$item = array_shift($items);
 			return array(
-				'parent' => $items[key($items)]['parent'],
-				'path' => $items[key($items)]['path'],
-				'storage' => $items[key($items)]['storage'],
-				'permissions' => $items[key($items)]['permissions'],
-				'uid_owner' => $items[key($items)]['uid_owner'],
+				'parent' => $item['parent'],
+				'path' => $item['path'],
+				'storage' => $item['storage'],
+				'permissions' => $item['permissions'],
+				'uid_owner' => $item['uid_owner'],
 			);
 		} else if ($format == self::FORMAT_GET_FOLDER_CONTENTS) {
 			$files = array();
@@ -122,12 +128,7 @@ class OC_Share_Backend_File implements OCP\Share_Backend_File_Dependent {
 
 				$storage = \OC\Files\Filesystem::getStorage('/');
 				$cache = $storage->getCache();
-				if ($item['encrypted'] or ($item['unencrypted_size'] > 0 and $cache->getMimetype($item['mimetype']) === 'httpd/unix-directory')) {
-					$file['size'] = $item['unencrypted_size'];
-					$file['encrypted_size'] = $item['size'];
-				} else {
-					$file['size'] = $item['size'];
-				}
+				$file['size'] = $item['size'];
 				$files[] = $file;
 			}
 			return $files;
@@ -157,6 +158,20 @@ class OC_Share_Backend_File implements OCP\Share_Backend_File_Dependent {
 			return $targets;
 		}
 		return array();
+	}
+
+	/**
+	 * check if server2server share is enabled
+	 *
+	 * @param int $shareType
+	 * @return boolean
+	 */
+	public function isShareTypeAllowed($shareType) {
+		if ($shareType === \OCP\Share::SHARE_TYPE_REMOTE) {
+			return \OCA\Files_Sharing\Helper::isOutgoingServer2serverShareEnabled();
+		}
+
+		return true;
 	}
 
 	/**

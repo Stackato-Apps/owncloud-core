@@ -23,16 +23,16 @@ namespace OCA\ObjectStore\Tests\Unit;
 use OC\Files\ObjectStore\ObjectStoreStorage;
 use OC\Files\ObjectStore\Swift as ObjectStoreToTest;
 
-use PHPUnit_Framework_TestCase;
-
 //class Swift extends PHPUnit_Framework_TestCase {
 class Swift extends \Test\Files\Storage\Storage {
 
 	private $objectStorage;
 
-	public function setUp() {
+	protected function setUp() {
+		parent::setUp();
+
 		if (!getenv('RUN_OBJECTSTORE_TESTS')) {
-			$this->markTestSkipped('objectstore tests are unreliable on travis');
+			$this->markTestSkipped('objectstore tests are unreliable in some environments');
 		}
 
 		\OC_App::disable('files_sharing');
@@ -74,15 +74,18 @@ class Swift extends \Test\Files\Storage\Storage {
 		$this->instance = new ObjectStoreStorage($params);
 	}
 
-	public function tearDown() {
+	protected function tearDown() {
 		if (is_null($this->instance)) {
 			return;
 		}
 		$this->objectStorage->deleteContainer(true);
 		$this->instance->getCache()->clear();
+
+		parent::tearDown();
 	}
 
 	public function testStat() {
+
 		$textFile = \OC::$SERVERROOT . '/tests/data/lorem.txt';
 		$ctimeStart = time();
 		$this->instance->file_put_contents('/lorem.txt', file_get_contents($textFile));

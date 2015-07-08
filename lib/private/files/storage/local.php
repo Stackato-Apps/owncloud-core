@@ -1,9 +1,37 @@
 <?php
 /**
- * Copyright (c) 2012 Robin Appelman <icewind@owncloud.com>
- * This file is licensed under the Affero General Public License version 3 or
- * later.
- * See the COPYING-README file.
+ * @author Andreas Fischer <bantu@owncloud.com>
+ * @author Bart Visscher <bartv@thisnet.nl>
+ * @author Brice Maron <brice@bmaron.net>
+ * @author Jakob Sack <mail@jakobsack.de>
+ * @author Joas Schilling <nickvergessen@owncloud.com>
+ * @author Jörn Friedrich Dreyer <jfd@butonic.de>
+ * @author Klaas Freitag <freitag@owncloud.com>
+ * @author Lukas Reschke <lukas@owncloud.com>
+ * @author Michael Gapczynski <GapczynskiM@gmail.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Robin Appelman <icewind@owncloud.com>
+ * @author Robin McCorkell <rmccorkell@karoshi.org.uk>
+ * @author Sjors van der Pluijm <sjors@desjors.nl>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
+ * @author Tigran Mkrtchyan <tigran.mkrtchyan@desy.de>
+ * @author Vincent Petry <pvince81@owncloud.com>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
  */
 
 namespace OC\Files\Storage;
@@ -35,13 +63,16 @@ if (\OC_Util::runningOnWindows()) {
 		}
 
 		public function mkdir($path) {
-			return @mkdir($this->datadir . $path, 0777, true);
+			return @mkdir($this->getSourcePath($path), 0777, true);
 		}
 
 		public function rmdir($path) {
+			if (!$this->isDeletable($path)) {
+				return false;
+			}
 			try {
 				$it = new \RecursiveIteratorIterator(
-					new \RecursiveDirectoryIterator($this->datadir . $path),
+					new \RecursiveDirectoryIterator($this->getSourcePath($path)),
 					\RecursiveIteratorIterator::CHILD_FIRST
 				);
 				/**
@@ -65,29 +96,30 @@ if (\OC_Util::runningOnWindows()) {
 					}
 					$it->next();
 				}
-				return rmdir($this->datadir . $path);
+				return rmdir($this->getSourcePath($path));
 			} catch (\UnexpectedValueException $e) {
 				return false;
 			}
 		}
 
 		public function opendir($path) {
-			return opendir($this->datadir . $path);
+			return opendir($this->getSourcePath($path));
 		}
 
 		public function is_dir($path) {
 			if (substr($path, -1) == '/') {
 				$path = substr($path, 0, -1);
 			}
-			return is_dir($this->datadir . $path);
+			return is_dir($this->getSourcePath($path));
 		}
 
 		public function is_file($path) {
-			return is_file($this->datadir . $path);
+			return is_file($this->getSourcePath($path));
 		}
 
 		public function stat($path) {
-			$fullPath = $this->datadir . $path;
+			clearstatcache();
+			$fullPath = $this->getSourcePath($path);
 			$statResult = stat($fullPath);
 			if (PHP_INT_SIZE === 4 && !$this->is_dir($path)) {
 				$filesize = $this->filesize($path);
@@ -98,9 +130,9 @@ if (\OC_Util::runningOnWindows()) {
 		}
 
 		public function filetype($path) {
-			$filetype = filetype($this->datadir . $path);
+			$filetype = filetype($this->getSourcePath($path));
 			if ($filetype == 'link') {
-				$filetype = filetype(realpath($this->datadir . $path));
+				$filetype = filetype(realpath($this->getSourcePath($path)));
 			}
 			return $filetype;
 		}
@@ -109,7 +141,7 @@ if (\OC_Util::runningOnWindows()) {
 			if ($this->is_dir($path)) {
 				return 0;
 			}
-			$fullPath = $this->datadir . $path;
+			$fullPath = $this->getSourcePath($path);
 			if (PHP_INT_SIZE === 4) {
 				$helper = new \OC\LargeFileHelper;
 				return $helper->getFilesize($fullPath);
@@ -118,20 +150,20 @@ if (\OC_Util::runningOnWindows()) {
 		}
 
 		public function isReadable($path) {
-			return is_readable($this->datadir . $path);
+			return is_readable($this->getSourcePath($path));
 		}
 
 		public function isUpdatable($path) {
-			return is_writable($this->datadir . $path);
+			return is_writable($this->getSourcePath($path));
 		}
 
 		public function file_exists($path) {
-			return file_exists($this->datadir . $path);
+			return file_exists($this->getSourcePath($path));
 		}
 
 		public function filemtime($path) {
-			clearstatcache($this->datadir . $path);
-			return filemtime($this->datadir . $path);
+			clearstatcache($this->getSourcePath($path));
+			return filemtime($this->getSourcePath($path));
 		}
 
 		public function touch($path, $mtime = null) {
@@ -142,30 +174,30 @@ if (\OC_Util::runningOnWindows()) {
 				return false;
 			}
 			if (!is_null($mtime)) {
-				$result = touch($this->datadir . $path, $mtime);
+				$result = touch($this->getSourcePath($path), $mtime);
 			} else {
-				$result = touch($this->datadir . $path);
+				$result = touch($this->getSourcePath($path));
 			}
 			if ($result) {
-				clearstatcache(true, $this->datadir . $path);
+				clearstatcache(true, $this->getSourcePath($path));
 			}
 
 			return $result;
 		}
 
 		public function file_get_contents($path) {
-			return file_get_contents($this->datadir . $path);
+			return file_get_contents($this->getSourcePath($path));
 		}
 
-		public function file_put_contents($path, $data) { //trigger_error("$path = ".var_export($path, 1));
-			return file_put_contents($this->datadir . $path, $data);
+		public function file_put_contents($path, $data) {
+			return file_put_contents($this->getSourcePath($path), $data);
 		}
 
 		public function unlink($path) {
 			if ($this->is_dir($path)) {
 				return $this->rmdir($path);
 			} else if ($this->is_file($path)) {
-				return unlink($this->datadir . $path);
+				return unlink($this->getSourcePath($path));
 			} else {
 				return false;
 			}
@@ -173,10 +205,19 @@ if (\OC_Util::runningOnWindows()) {
 		}
 
 		public function rename($path1, $path2) {
-			if (!$this->isUpdatable($path1)) {
-				\OC_Log::write('core', 'unable to rename, file is not writable : ' . $path1, \OC_Log::ERROR);
+			$srcParent = dirname($path1);
+			$dstParent = dirname($path2);
+
+			if (!$this->isUpdatable($srcParent)) {
+				\OC_Log::write('core', 'unable to rename, source directory is not writable : ' . $srcParent, \OC_Log::ERROR);
 				return false;
 			}
+
+			if (!$this->isUpdatable($dstParent)) {
+				\OC_Log::write('core', 'unable to rename, destination directory is not writable : ' . $dstParent, \OC_Log::ERROR);
+				return false;
+			}
+
 			if (!$this->file_exists($path1)) {
 				\OC_Log::write('core', 'unable to rename, file does not exists : ' . $path1, \OC_Log::ERROR);
 				return false;
@@ -188,44 +229,42 @@ if (\OC_Util::runningOnWindows()) {
 				$this->unlink($path2);
 			}
 
-			return rename($this->datadir . $path1, $this->datadir . $path2);
+			if ($this->is_dir($path1)) {
+				// we cant move folders across devices, use copy instead
+				$stat1 = stat(dirname($this->getSourcePath($path1)));
+				$stat2 = stat(dirname($this->getSourcePath($path2)));
+				if ($stat1['dev'] !== $stat2['dev']) {
+					$result = $this->copy($path1, $path2);
+					if ($result) {
+						$result &= $this->rmdir($path1);
+					}
+					return $result;
+				}
+			}
+
+			return rename($this->getSourcePath($path1), $this->getSourcePath($path2));
 		}
 
 		public function copy($path1, $path2) {
 			if ($this->is_dir($path1)) {
 				return parent::copy($path1, $path2);
 			} else {
-				return copy($this->datadir . $path1, $this->datadir . $path2);
+				return copy($this->getSourcePath($path1), $this->getSourcePath($path2));
 			}
 		}
 
 		public function fopen($path, $mode) {
-			if ($return = fopen($this->datadir . $path, $mode)) {
-				switch ($mode) {
-					case 'r':
-						break;
-					case 'r+':
-					case 'w+':
-					case 'x+':
-					case 'a+':
-						break;
-					case 'w':
-					case 'x':
-					case 'a':
-						break;
-				}
-			}
-			return $return;
+			return fopen($this->getSourcePath($path), $mode);
 		}
 
 		public function hash($type, $path, $raw = false) {
-			return hash_file($type, $this->datadir . $path, $raw);
+			return hash_file($type, $this->getSourcePath($path), $raw);
 		}
 
 		public function free_space($path) {
-			$space = @disk_free_space($this->datadir . $path);
+			$space = @disk_free_space($this->getSourcePath($path));
 			if ($space === false || is_null($space)) {
-				return \OC\Files\SPACE_UNKNOWN;
+				return \OCP\Files\FileInfo::SPACE_UNKNOWN;
 			}
 			return $space;
 		}
@@ -235,24 +274,30 @@ if (\OC_Util::runningOnWindows()) {
 		}
 
 		public function getLocalFile($path) {
-			return $this->datadir . $path;
+			return $this->getSourcePath($path);
 		}
 
 		public function getLocalFolder($path) {
-			return $this->datadir . $path;
+			return $this->getSourcePath($path);
 		}
 
 		/**
 		 * @param string $query
+		 * @param string $dir
+		 * @return array
 		 */
 		protected function searchInDir($query, $dir = '') {
 			$files = array();
-			foreach (scandir($this->datadir . $dir) as $item) {
-				if ($item == '.' || $item == '..') continue;
+			$physicalDir = $this->getSourcePath($dir);
+			foreach (scandir($physicalDir) as $item) {
+				if ($item == '.' || $item == '..')
+					continue;
+				$physicalItem = $physicalDir . '/' . $item;
+
 				if (strstr(strtolower($item), strtolower($query)) !== false) {
 					$files[] = $dir . '/' . $item;
 				}
-				if (is_dir($this->datadir . $dir . '/' . $item)) {
+				if (is_dir($physicalItem)) {
 					$files = array_merge($files, $this->searchInDir($query, $dir . '/' . $item));
 				}
 			}
@@ -275,10 +320,77 @@ if (\OC_Util::runningOnWindows()) {
 		}
 
 		/**
+		 * Get the source path (on disk) of a given path
+		 *
+		 * @param string $path
+		 * @return string
+		 */
+		public function getSourcePath($path) {
+			$fullPath = $this->datadir . $path;
+			return $fullPath;
+		}
+
+		/**
 		 * {@inheritdoc}
 		 */
 		public function isLocal() {
 			return true;
+		}
+
+		/**
+		 * get the ETag for a file or folder
+		 *
+		 * @param string $path
+		 * @return string
+		 */
+		public function getETag($path) {
+			if ($this->is_file($path)) {
+				$stat = $this->stat($path);
+				return md5(
+					$stat['mtime'] .
+					$stat['ino'] .
+					$stat['dev'] .
+					$stat['size']
+				);
+			} else {
+				return parent::getETag($path);
+			}
+		}
+
+		/**
+		 * @param \OCP\Files\Storage $sourceStorage
+		 * @param string $sourceInternalPath
+		 * @param string $targetInternalPath
+		 * @return bool
+		 */
+		public function copyFromStorage(\OCP\Files\Storage $sourceStorage, $sourceInternalPath, $targetInternalPath) {
+			if($sourceStorage->instanceOfStorage('\OC\Files\Storage\Local')){
+				/**
+				 * @var \OC\Files\Storage\Local $sourceStorage
+				 */
+				$rootStorage = new Local(['datadir' => '/']);
+				return $rootStorage->copy($sourceStorage->getSourcePath($sourceInternalPath), $this->getSourcePath($targetInternalPath));
+			} else {
+				return parent::copyFromStorage($sourceStorage, $sourceInternalPath, $targetInternalPath);
+			}
+		}
+
+		/**
+		 * @param \OCP\Files\Storage $sourceStorage
+		 * @param string $sourceInternalPath
+		 * @param string $targetInternalPath
+		 * @return bool
+		 */
+		public function moveFromStorage(\OCP\Files\Storage $sourceStorage, $sourceInternalPath, $targetInternalPath) {
+			if ($sourceStorage->instanceOfStorage('\OC\Files\Storage\Local')) {
+				/**
+				 * @var \OC\Files\Storage\Local $sourceStorage
+				 */
+				$rootStorage = new Local(['datadir' => '/']);
+				return $rootStorage->rename($sourceStorage->getSourcePath($sourceInternalPath), $this->getSourcePath($targetInternalPath));
+			} else {
+				return parent::moveFromStorage($sourceStorage, $sourceInternalPath, $targetInternalPath);
+			}
 		}
 	}
 }

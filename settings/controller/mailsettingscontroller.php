@@ -1,12 +1,24 @@
 <?php
 /**
-* @author Joas Schilling
-* @author Lukas Reschke
-* @copyright 2014 Joas Schilling nickvergessen@owncloud.com
-*
- * This file is licensed under the Affero General Public License version 3 or
- * later.
- * See the COPYING-README file.
+ * @author Joas Schilling <nickvergessen@owncloud.com>
+ * @author Lukas Reschke <lukas@owncloud.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
  */
 
 namespace OC\Settings\Controller;
@@ -16,6 +28,8 @@ use \OCP\AppFramework\Controller;
 use OCP\IRequest;
 use OCP\IL10N;
 use OCP\IConfig;
+use OCP\Mail\IMailer;
+use OCP\Mail\IMessage;
 
 /**
  * @package OC\Settings\Controller
@@ -30,8 +44,8 @@ class MailSettingsController extends Controller {
 	private $userSession;
 	/** @var \OC_Defaults */
 	private $defaults;
-	/** @var \OC_Mail */
-	private $mail;
+	/** @var IMailer */
+	private $mailer;
 	/** @var string */
 	private $defaultMailAddress;
 
@@ -42,7 +56,7 @@ class MailSettingsController extends Controller {
 	 * @param IConfig $config
 	 * @param Session $userSession
 	 * @param \OC_Defaults $defaults
-	 * @param \OC_Mail $mail
+	 * @param IMailer $mailer
 	 * @param string $defaultMailAddress
 	 */
 	public function __construct($appName,
@@ -51,14 +65,14 @@ class MailSettingsController extends Controller {
 								IConfig $config,
 								Session $userSession,
 								\OC_Defaults $defaults,
-								\OC_Mail $mail,
+								IMailer $mailer,
 								$defaultMailAddress) {
 		parent::__construct($appName, $request);
 		$this->l10n = $l10n;
 		$this->config = $config;
 		$this->userSession = $userSession;
 		$this->defaults = $defaults;
-		$this->mail = $mail;
+		$this->mailer = $mailer;
 		$this->defaultMailAddress = $defaultMailAddress;
 	}
 
@@ -84,19 +98,18 @@ class MailSettingsController extends Controller {
 									$mail_smtpport) {
 
 		$params = get_defined_vars();
+		$configs = [];
 		foreach($params as $key => $value) {
-			if(empty($value)) {
-				$this->config->deleteSystemValue($key);
-			} else {
-				$this->config->setSystemValue($key, $value);
-			}
+			$configs[$key] = (empty($value)) ? null : $value;
 		}
 
 		// Delete passwords from config in case no auth is specified
-		if($params['mail_smtpauth'] !== 1) {
-			$this->config->deleteSystemValue('mail_smtpname');
-			$this->config->deleteSystemValue('mail_smtppassword');
+		if ($params['mail_smtpauth'] !== 1) {
+			$configs['mail_smtpname'] = null;
+			$configs['mail_smtppassword'] = null;
 		}
+
+		$this->config->setSystemValues($configs);
 
 		return array('data' =>
 			array('message' =>
@@ -113,8 +126,10 @@ class MailSettingsController extends Controller {
 	 * @return array
 	 */
 	public function storeCredentials($mail_smtpname, $mail_smtppassword) {
-		$this->config->setSystemValue('mail_smtpname', $mail_smtpname);
-		$this->config->setSystemValue('mail_smtppassword', $mail_smtppassword);
+		$this->config->setSystemValues([
+			'mail_smtpname'		=> $mail_smtpname,
+			'mail_smtppassword'	=> $mail_smtppassword,
+		]);
 
 		return array('data' =>
 			array('message' =>
@@ -132,19 +147,19 @@ class MailSettingsController extends Controller {
 		$email = $this->config->getUserValue($this->userSession->getUser()->getUID(), $this->appName, 'email', '');
 		if (!empty($email)) {
 			try {
-				$this->mail->send($email, $this->userSession->getUser()->getDisplayName(),
-					$this->l10n->t('test email settings'),
-					$this->l10n->t('If you received this email, the settings seems to be correct.'),
-					$this->defaultMailAddress,
-					$this->defaults->getName()
-				);
+				$message = $this->mailer->createMessage();
+				$message->setTo([$email => $this->userSession->getUser()->getDisplayName()]);
+				$message->setFrom([$this->defaultMailAddress]);
+				$message->setSubject($this->l10n->t('test email settings'));
+				$message->setPlainBody('If you received this email, the settings seem to be correct.');
+				$this->mailer->send($message);
 			} catch (\Exception $e) {
-				return array('data' =>
-					array('message' =>
-						(string) $this->l10n->t('A problem occurred while sending the email. Please revise your settings.'),
-					),
-					'status' => 'error'
-				);
+				return [
+					'data' => [
+						'message' => (string) $this->l10n->t('A problem occurred while sending the email. Please revise your settings. (Error: %s)', [$e->getMessage()]),
+					],
+					'status' => 'error',
+				];
 			}
 
 			return array('data' =>

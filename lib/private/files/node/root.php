@@ -1,20 +1,36 @@
 <?php
 /**
- * Copyright (c) 2013 Robin Appelman <icewind@owncloud.com>
- * This file is licensed under the Affero General Public License version 3 or
- * later.
- * See the COPYING-README file.
+ * @author Bernhard Posselt <dev@bernhard-posselt.com>
+ * @author Joas Schilling <nickvergessen@owncloud.com>
+ * @author Jörn Friedrich Dreyer <jfd@butonic.de>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Robin Appelman <icewind@owncloud.com>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
  */
 
 namespace OC\Files\Node;
 
-use OC\Files\Cache\Cache;
 use OC\Files\Mount\Manager;
-use OC\Files\Mount\Mount;
+use OC\Files\Mount\MountPoint;
 use OCP\Files\NotFoundException;
 use OCP\Files\NotPermittedException;
-use OC\Hooks\Emitter;
 use OC\Hooks\PublicEmitter;
+use OCP\Files\IRootFolder;
 
 /**
  * Class Root
@@ -35,7 +51,7 @@ use OC\Hooks\PublicEmitter;
  *
  * @package OC\Files\Node
  */
-class Root extends Folder implements Emitter {
+class Root extends Folder implements IRootFolder {
 
 	/**
 	 * @var \OC\Files\Mount\Manager $mountManager
@@ -78,7 +94,7 @@ class Root extends Folder implements Emitter {
 	 * @param string $method
 	 * @param callable $callback
 	 */
-	public function listen($scope, $method, $callback) {
+	public function listen($scope, $method, callable $callback) {
 		$this->emitter->listen($scope, $method, $callback);
 	}
 
@@ -87,7 +103,7 @@ class Root extends Folder implements Emitter {
 	 * @param string $method optional
 	 * @param callable $callback optional
 	 */
-	public function removeListener($scope = null, $method = null, $callback = null) {
+	public function removeListener($scope = null, $method = null, callable $callback = null) {
 		$this->emitter->removeListener($scope, $method, $callback);
 	}
 
@@ -106,13 +122,13 @@ class Root extends Folder implements Emitter {
 	 * @param array $arguments
 	 */
 	public function mount($storage, $mountPoint, $arguments = array()) {
-		$mount = new Mount($storage, $mountPoint, $arguments);
+		$mount = new MountPoint($storage, $mountPoint, $arguments);
 		$this->mountManager->addMount($mount);
 	}
 
 	/**
 	 * @param string $mountPoint
-	 * @return \OC\Files\Mount\Mount
+	 * @return \OC\Files\Mount\MountPoint
 	 */
 	public function getMount($mountPoint) {
 		return $this->mountManager->find($mountPoint);
@@ -120,7 +136,7 @@ class Root extends Folder implements Emitter {
 
 	/**
 	 * @param string $mountPoint
-	 * @return \OC\Files\Mount\Mount[]
+	 * @return \OC\Files\Mount\MountPoint[]
 	 */
 	public function getMountsIn($mountPoint) {
 		return $this->mountManager->findIn($mountPoint);
@@ -128,7 +144,7 @@ class Root extends Folder implements Emitter {
 
 	/**
 	 * @param string $storageId
-	 * @return \OC\Files\Mount\Mount[]
+	 * @return \OC\Files\Mount\MountPoint[]
 	 */
 	public function getMountByStorageId($storageId) {
 		return $this->mountManager->findByStorageId($storageId);
@@ -136,14 +152,14 @@ class Root extends Folder implements Emitter {
 
 	/**
 	 * @param int $numericId
-	 * @return Mount[]
+	 * @return MountPoint[]
 	 */
 	public function getMountByNumericStorageId($numericId) {
 		return $this->mountManager->findByNumericId($numericId);
 	}
 
 	/**
-	 * @param \OC\Files\Mount\Mount $mount
+	 * @param \OC\Files\Mount\MountPoint $mount
 	 */
 	public function unMount($mount) {
 		$this->mountManager->remove($mount);
@@ -153,7 +169,7 @@ class Root extends Folder implements Emitter {
 	 * @param string $path
 	 * @throws \OCP\Files\NotFoundException
 	 * @throws \OCP\Files\NotPermittedException
-	 * @return string
+	 * @return \OCP\Files\Node
 	 */
 	public function get($path) {
 		$path = $this->normalizePath($path);
@@ -262,7 +278,7 @@ class Root extends Folder implements Emitter {
 	 * @return int
 	 */
 	public function getPermissions() {
-		return \OCP\PERMISSION_CREATE;
+		return \OCP\Constants::PERMISSION_CREATE;
 	}
 
 	/**

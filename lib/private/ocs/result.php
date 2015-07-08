@@ -1,24 +1,29 @@
 <?php
 /**
-* ownCloud
-*
-* @author Tom Needham
-* @copyright 2012 Tom Needham tom@owncloud.com
-*
-* This library is free software; you can redistribute it and/or
-* modify it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE
-* License as published by the Free Software Foundation; either
-* version 3 of the License, or any later version.
-*
-* This library is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU AFFERO GENERAL PUBLIC LICENSE for more details.
-*
-* You should have received a copy of the GNU Affero General Public
-* License along with this library.  If not, see <http://www.gnu.org/licenses/>.
-*
-*/
+ * @author Bart Visscher <bartv@thisnet.nl>
+ * @author Björn Schießle <schiessle@owncloud.com>
+ * @author Christopher Schäpers <kondou@ts.unde.re>
+ * @author Lukas Reschke <lukas@owncloud.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Robin McCorkell <rmccorkell@karoshi.org.uk>
+ * @author Tom Needham <tom@owncloud.com>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
+ */
 
 class OC_OCS_Result{
 
@@ -27,6 +32,8 @@ class OC_OCS_Result{
 	/**
 	 * create the OCS_Result object
 	 * @param mixed $data the data to return
+	 * @param int $code
+	 * @param null|string $message
 	 */
 	public function __construct($data=null, $code=100, $message=null) {
 		if ($data === null) {
@@ -44,7 +51,7 @@ class OC_OCS_Result{
 	 * optionally set the total number of items available
 	 * @param int $items
 	 */
-	public function setTotalItems(int $items) {
+	public function setTotalItems($items) {
 		$this->items = $items;
 	}
 
@@ -52,7 +59,7 @@ class OC_OCS_Result{
 	 * optionally set the the number of items per page
 	 * @param int $items
 	 */
-	public function setItemsPerPage(int $items) {
+	public function setItemsPerPage($items) {
 		$this->perPage = $items;
 	}
 
@@ -92,7 +99,7 @@ class OC_OCS_Result{
 	}
 
 	/**
-	 * return bool if the method succedded
+	 * return bool Whether the method succeeded
 	 * @return bool
 	 */
 	public function succeeded() {

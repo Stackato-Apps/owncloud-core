@@ -1,25 +1,35 @@
 <?php
 /**
-* ownCloud
-*
-* @author Michael Gapczynski
-* @copyright 2012 Michael Gapczynski mtgap@owncloud.com
-* @copyright 2014 Vincent Petry <pvince81@owncloud.com>
-* @copyright 2014 Robin McCorkell <rmccorkell@karoshi.org.uk>
-*
-* This library is free software; you can redistribute it and/or
-* modify it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE
-* License as published by the Free Software Foundation; either
-* version 3 of the License, or any later version.
-*
-* This library is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU AFFERO GENERAL PUBLIC LICENSE for more details.
-*
-* You should have received a copy of the GNU Affero General Public
-* License along with this library.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ * @author Bart Visscher <bartv@thisnet.nl>
+ * @author Björn Schießle <schiessle@owncloud.com>
+ * @author Frank Karlitschek <frank@owncloud.org>
+ * @author Joas Schilling <nickvergessen@owncloud.com>
+ * @author Jörn Friedrich Dreyer <jfd@butonic.de>
+ * @author Lukas Reschke <lukas@owncloud.com>
+ * @author Michael Gapczynski <GapczynskiM@gmail.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Philipp Kapfer <philipp.kapfer@gmx.at>
+ * @author Robin Appelman <icewind@owncloud.com>
+ * @author Robin McCorkell <rmccorkell@karoshi.org.uk>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
+ * @author Vincent Petry <pvince81@owncloud.com>
+ *
+ * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
+ */
 
 /**
  * Class to configure mount.json globally and for users
@@ -31,6 +41,10 @@ class OC_Mount_Config {
 	const MOUNT_TYPE_GROUP = 'group';
 	const MOUNT_TYPE_USER = 'user';
 	const MOUNT_TYPE_PERSONAL = 'personal';
+
+	// getBackendStatus return types
+	const STATUS_SUCCESS = 0;
+	const STATUS_ERROR = 1;
 
 	// whether to skip backend test (for unit tests, as this static class is not mockable)
 	public static $skipTest = false;
@@ -64,16 +78,17 @@ class OC_Mount_Config {
 	}
 
 	/**
-	* Get details on each of the external storage backends, used for the mount config UI
-	* If a custom UI is needed, add the key 'custom' and a javascript file with that name will be loaded
-	* If the configuration parameter should be secret, add a '*' to the beginning of the value
-	* If the configuration parameter is a boolean, add a '!' to the beginning of the value
-	* If the configuration parameter is optional, add a '&' to the beginning of the value
-	* If the configuration parameter is hidden, add a '#' to the beginning of the value
-	* @return array
-	*/
+	 * Get details on each of the external storage backends, used for the mount config UI
+	 * If a custom UI is needed, add the key 'custom' and a javascript file with that name will be loaded
+	 * If the configuration parameter should be secret, add a '*' to the beginning of the value
+	 * If the configuration parameter is a boolean, add a '!' to the beginning of the value
+	 * If the configuration parameter is optional, add a '&' to the beginning of the value
+	 * If the configuration parameter is hidden, add a '#' to the beginning of the value
+	 *
+	 * @return array
+	 */
 	public static function getBackends() {
-		$sortFunc = function($a, $b) {
+		$sortFunc = function ($a, $b) {
 			return strcasecmp($a['backend'], $b['backend']);
 		};
 
@@ -100,26 +115,13 @@ class OC_Mount_Config {
 
 	/**
 	 * Hook that mounts the given user's visible mount points
+	 *
 	 * @param array $data
 	 */
 	public static function initMountPointsHook($data) {
-		$mountPoints = self::getAbsoluteMountPoints($data['user']);
-		$loader = \OC\Files\Filesystem::getLoader();
-		$manager = \OC\Files\Filesystem::getMountManager();
-		foreach ($mountPoints as $mountPoint => $options) {
-			if (isset($options['options']['objectstore'])) {
-				$objectClass = $options['options']['objectstore']['class'];
-				$options['options']['objectstore'] = new $objectClass($options['options']['objectstore']);
-			}
-			if (isset($options['personal']) && $options['personal']) {
-				$mount = new \OCA\Files_External\PersonalMount($options['class'], $mountPoint, $options['options'], $loader);
-			} else{
-				$mount = new \OC\Files\Mount\Mount($options['class'], $mountPoint, $options['options'], $loader);
-			}
-			$manager->addMount($mount);
-		}
-
+		self::addStorageIdToConfig(null);
 		if ($data['user']) {
+			self::addStorageIdToConfig($data['user']);
 			$user = \OC::$server->getUserManager()->get($data['user']);
 			if (!$user) {
 				\OC_Log::write(
@@ -154,15 +156,7 @@ class OC_Mount_Config {
 	public static function getAbsoluteMountPoints($user) {
 		$mountPoints = array();
 
-		$datadir = \OC_Config::getValue("datadirectory", \OC::$SERVERROOT . "/data");
-		$mount_file = \OC_Config::getValue("mount_file", $datadir . "/mount.json");
-
 		$backends = self::getBackends();
-
-		//move config file to it's new position
-		if (is_file(\OC::$SERVERROOT . '/config/mount.json')) {
-			rename(\OC::$SERVERROOT . '/config/mount.json', $mount_file);
-		}
 
 		// Load system mount points
 		$mountConfig = self::readData();
@@ -177,8 +171,9 @@ class OC_Mount_Config {
 				}
 
 				// Override if priority greater
-				if ( (!isset($mountPoints[$mountPoint]))
-					|| ($options['priority'] >= $mountPoints[$mountPoint]['priority']) ) {
+				if ((!isset($mountPoints[$mountPoint]))
+					|| ($options['priority'] >= $mountPoints[$mountPoint]['priority'])
+				) {
 					$options['priority_type'] = self::MOUNT_TYPE_GLOBAL;
 					$options['backend'] = $backends[$options['class']]['backend'];
 					$mountPoints[$mountPoint] = $options;
@@ -200,8 +195,9 @@ class OC_Mount_Config {
 				}
 
 				// Override if priority greater
-				if ( (!isset($mountPoints[$mountPoint]))
-					|| ($options['priority'] >= $mountPoints[$mountPoint]['priority']) ) {
+				if ((!isset($mountPoints[$mountPoint]))
+					|| ($options['priority'] >= $mountPoints[$mountPoint]['priority'])
+				) {
 					$options['priority_type'] = self::MOUNT_TYPE_GLOBAL;
 					$options['backend'] = $backends[$options['class']]['backend'];
 					$mountPoints[$mountPoint] = $options;
@@ -224,9 +220,10 @@ class OC_Mount_Config {
 						}
 
 						// Override if priority greater or if priority type different
-						if ( (!isset($mountPoints[$mountPoint]))
+						if ((!isset($mountPoints[$mountPoint]))
 							|| ($options['priority'] >= $mountPoints[$mountPoint]['priority'])
-							|| ($mountPoints[$mountPoint]['priority_type'] !== self::MOUNT_TYPE_GROUP) ) {
+							|| ($mountPoints[$mountPoint]['priority_type'] !== self::MOUNT_TYPE_GROUP)
+						) {
 							$options['priority_type'] = self::MOUNT_TYPE_GROUP;
 							$options['backend'] = $backends[$options['class']]['backend'];
 							$mountPoints[$mountPoint] = $options;
@@ -251,9 +248,10 @@ class OC_Mount_Config {
 						}
 
 						// Override if priority greater or if priority type different
-						if ( (!isset($mountPoints[$mountPoint]))
+						if ((!isset($mountPoints[$mountPoint]))
 							|| ($options['priority'] >= $mountPoints[$mountPoint]['priority'])
-							|| ($mountPoints[$mountPoint]['priority_type'] !== self::MOUNT_TYPE_USER) ) {
+							|| ($mountPoints[$mountPoint]['priority_type'] !== self::MOUNT_TYPE_USER)
+						) {
 							$options['priority_type'] = self::MOUNT_TYPE_USER;
 							$options['backend'] = $backends[$options['class']]['backend'];
 							$mountPoints[$mountPoint] = $options;
@@ -263,17 +261,21 @@ class OC_Mount_Config {
 			}
 		}
 
+		$personalBackends = self::getPersonalBackends();
+
 		// Load personal mount points
 		$mountConfig = self::readData($user);
 		if (isset($mountConfig[self::MOUNT_TYPE_USER][$user])) {
 			foreach ($mountConfig[self::MOUNT_TYPE_USER][$user] as $mountPoint => $options) {
-				$options['personal'] = true;
-				$options['options'] = self::decryptPasswords($options['options']);
+				if (isset($personalBackends[$options['class']])) {
+					$options['personal'] = true;
+					$options['options'] = self::decryptPasswords($options['options']);
 
-				// Always override previous config
-				$options['priority_type'] = self::MOUNT_TYPE_PERSONAL;
-				$options['backend'] = $backends[$options['class']]['backend'];
-				$mountPoints[$mountPoint] = $options;
+					// Always override previous config
+					$options['priority_type'] = self::MOUNT_TYPE_PERSONAL;
+					$options['backend'] = $backends[$options['class']]['backend'];
+					$mountPoints[$mountPoint] = $options;
+				}
 			}
 		}
 
@@ -283,32 +285,42 @@ class OC_Mount_Config {
 	/**
 	 * fill in the correct values for $user
 	 *
-	 * @param string $user
-	 * @param string $input
+	 * @param string $user user value
+	 * @param string|array $input
 	 * @return string
 	 */
 	private static function setUserVars($user, $input) {
-		return str_replace('$user', $user, $input);
+		if (is_array($input)) {
+			foreach ($input as &$value) {
+				if (is_string($value)) {
+					$value = str_replace('$user', $user, $value);
+				}
+			}
+		} else {
+			$input = str_replace('$user', $user, $input);
+		}
+		return $input;
 	}
 
 
 	/**
-	* Get details on each of the external storage backends, used for the mount config UI
-	* Some backends are not available as a personal backend, f.e. Local and such that have
-	* been disabled by the admin.
-	*
-	* If a custom UI is needed, add the key 'custom' and a javascript file with that name will be loaded
-	* If the configuration parameter should be secret, add a '*' to the beginning of the value
-	* If the configuration parameter is a boolean, add a '!' to the beginning of the value
-	* If the configuration parameter is optional, add a '&' to the beginning of the value
-	* If the configuration parameter is hidden, add a '#' to the beginning of the value
-	* @return array
-	*/
+	 * Get details on each of the external storage backends, used for the mount config UI
+	 * Some backends are not available as a personal backend, f.e. Local and such that have
+	 * been disabled by the admin.
+	 *
+	 * If a custom UI is needed, add the key 'custom' and a javascript file with that name will be loaded
+	 * If the configuration parameter should be secret, add a '*' to the beginning of the value
+	 * If the configuration parameter is a boolean, add a '!' to the beginning of the value
+	 * If the configuration parameter is optional, add a '&' to the beginning of the value
+	 * If the configuration parameter is hidden, add a '#' to the beginning of the value
+	 *
+	 * @return array
+	 */
 	public static function getPersonalBackends() {
 
 		// Check whether the user has permissions to add personal storage backends
 		// return an empty array if this is not the case
-		if(OCP\Config::getAppValue('files_external', 'allow_user_mounting', 'yes') !== 'yes') {
+		if (OCP\Config::getAppValue('files_external', 'allow_user_mounting', 'yes') !== 'yes') {
 			return array();
 		}
 
@@ -328,10 +340,11 @@ class OC_Mount_Config {
 	}
 
 	/**
-	* Get the system mount points
-	* The returned array is not in the same format as getUserMountPoints()
-	* @return array
-	*/
+	 * Get the system mount points
+	 * The returned array is not in the same format as getUserMountPoints()
+	 *
+	 * @return array
+	 */
 	public static function getSystemMountPoints() {
 		$mountPoints = self::readData();
 		$backends = self::getBackends();
@@ -341,7 +354,7 @@ class OC_Mount_Config {
 				foreach ($mounts as $mountPoint => $mount) {
 					// Update old classes to new namespace
 					if (strpos($mount['class'], 'OC_Filestorage_') !== false) {
-						$mount['class'] = '\OC\Files\Storage\\'.substr($mount['class'], 15);
+						$mount['class'] = '\OC\Files\Storage\\' . substr($mount['class'], 15);
 					}
 					$mount['options'] = self::decryptPasswords($mount['options']);
 					if (!isset($mount['priority'])) {
@@ -356,9 +369,17 @@ class OC_Mount_Config {
 						'backend' => $backends[$mount['class']]['backend'],
 						'priority' => $mount['priority'],
 						'options' => $mount['options'],
-						'applicable' => array('groups' => array($group), 'users' => array()),
-						'status' => self::getBackendStatus($mount['class'], $mount['options'], false)
+						'applicable' => array('groups' => array($group), 'users' => array())
 					);
+					if (isset($mount['id'])) {
+						$config['id'] = (int)$mount['id'];
+					}
+					if (isset($mount['storage_id'])) {
+						$config['storage_id'] = (int)$mount['storage_id'];
+					}
+					if (isset($mount['mountOptions'])) {
+						$config['mountOptions'] = $mount['mountOptions'];
+					}
 					$hash = self::makeConfigHash($config);
 					// If an existing config exists (with same class, mountpoint and options)
 					if (isset($system[$hash])) {
@@ -376,7 +397,7 @@ class OC_Mount_Config {
 				foreach ($mounts as $mountPoint => $mount) {
 					// Update old classes to new namespace
 					if (strpos($mount['class'], 'OC_Filestorage_') !== false) {
-						$mount['class'] = '\OC\Files\Storage\\'.substr($mount['class'], 15);
+						$mount['class'] = '\OC\Files\Storage\\' . substr($mount['class'], 15);
 					}
 					$mount['options'] = self::decryptPasswords($mount['options']);
 					if (!isset($mount['priority'])) {
@@ -390,9 +411,17 @@ class OC_Mount_Config {
 						'backend' => $backends[$mount['class']]['backend'],
 						'priority' => $mount['priority'],
 						'options' => $mount['options'],
-						'applicable' => array('groups' => array(), 'users' => array($user)),
-						'status' => self::getBackendStatus($mount['class'], $mount['options'], false)
+						'applicable' => array('groups' => array(), 'users' => array($user))
 					);
+					if (isset($mount['id'])) {
+						$config['id'] = (int)$mount['id'];
+					}
+					if (isset($mount['storage_id'])) {
+						$config['storage_id'] = (int)$mount['storage_id'];
+					}
+					if (isset($mount['mountOptions'])) {
+						$config['mountOptions'] = $mount['mountOptions'];
+					}
 					$hash = self::makeConfigHash($config);
 					// If an existing config exists (with same class, mountpoint and options)
 					if (isset($system[$hash])) {
@@ -409,10 +438,11 @@ class OC_Mount_Config {
 	}
 
 	/**
-	* Get the personal mount points of the current user
-	* The returned array is not in the same format as getUserMountPoints()
-	* @return array
-	*/
+	 * Get the personal mount points of the current user
+	 * The returned array is not in the same format as getUserMountPoints()
+	 *
+	 * @return array
+	 */
 	public static function getPersonalMountPoints() {
 		$mountPoints = self::readData(OCP\User::getUser());
 		$backEnds = self::getBackends();
@@ -422,17 +452,26 @@ class OC_Mount_Config {
 			foreach ($mountPoints[self::MOUNT_TYPE_USER][$uid] as $mountPoint => $mount) {
 				// Update old classes to new namespace
 				if (strpos($mount['class'], 'OC_Filestorage_') !== false) {
-					$mount['class'] = '\OC\Files\Storage\\'.substr($mount['class'], 15);
+					$mount['class'] = '\OC\Files\Storage\\' . substr($mount['class'], 15);
 				}
 				$mount['options'] = self::decryptPasswords($mount['options']);
-				$personal[] = array(
+				$config = array(
 					'class' => $mount['class'],
 					// Remove '/uid/files/' from mount point
 					'mountpoint' => substr($mountPoint, strlen($uid) + 8),
 					'backend' => $backEnds[$mount['class']]['backend'],
-					'options' => $mount['options'],
-					'status' => self::getBackendStatus($mount['class'], $mount['options'], true)
+					'options' => $mount['options']
 				);
+				if (isset($mount['id'])) {
+					$config['id'] = (int)$mount['id'];
+				}
+				if (isset($mount['storage_id'])) {
+					$config['storage_id'] = (int)$mount['storage_id'];
+				}
+				if (isset($mount['mountOptions'])) {
+					$config['mountOptions'] = $mount['mountOptions'];
+				}
+				$personal[] = $config;
 			}
 		}
 		return $personal;
@@ -440,13 +479,14 @@ class OC_Mount_Config {
 
 	/**
 	 * Test connecting using the given backend configuration
+	 *
 	 * @param string $class backend class name
 	 * @param array $options backend configuration options
-	 * @return bool true if the connection succeeded, false otherwise
+	 * @return int see self::STATUS_*
 	 */
-	private static function getBackendStatus($class, $options, $isPersonal) {
+	public static function getBackendStatus($class, $options, $isPersonal) {
 		if (self::$skipTest) {
-			return true;
+			return self::STATUS_SUCCESS;
 		}
 		foreach ($options as &$option) {
 			$option = self::setUserVars(OCP\User::getUser(), $option);
@@ -454,26 +494,30 @@ class OC_Mount_Config {
 		if (class_exists($class)) {
 			try {
 				$storage = new $class($options);
-				return $storage->test($isPersonal);
+				if ($storage->test($isPersonal)) {
+					return self::STATUS_SUCCESS;
+				}
 			} catch (Exception $exception) {
 				\OCP\Util::logException('files_external', $exception);
-				return false;
 			}
 		}
-		return false;
+		return self::STATUS_ERROR;
 	}
 
 	/**
-	* Add a mount point to the filesystem
-	* @param string $mountPoint Mount point
-	* @param string $class Backend class
-	* @param array $classOptions Backend parameters for the class
-	* @param string $mountType MOUNT_TYPE_GROUP | MOUNT_TYPE_USER
-	* @param string $applicable User or group to apply mount to
-	* @param bool $isPersonal Personal or system mount point i.e. is this being called from the personal or admin page
-	* @param int|null $priority Mount point priority, null for default
-	* @return boolean
-	*/
+	 * Add a mount point to the filesystem
+	 *
+	 * @param string $mountPoint Mount point
+	 * @param string $class Backend class
+	 * @param array $classOptions Backend parameters for the class
+	 * @param string $mountType MOUNT_TYPE_GROUP | MOUNT_TYPE_USER
+	 * @param string $applicable User or group to apply mount to
+	 * @param bool $isPersonal Personal or system mount point i.e. is this being called from the personal or admin page
+	 * @param int|null $priority Mount point priority, null for default
+	 * @return boolean
+	 *
+	 * @deprecated use StoragesService#addStorage() instead
+	 */
 	public static function addMountPoint($mountPoint,
 										 $class,
 										 $classOptions,
@@ -500,22 +544,22 @@ class OC_Mount_Config {
 			if ($applicable != OCP\User::getUser() || !isset($allowed_backends[$class])) {
 				return false;
 			}
-			$mountPoint = '/'.$applicable.'/files/'.ltrim($mountPoint, '/');
+			$mountPoint = '/' . $applicable . '/files/' . ltrim($mountPoint, '/');
 		} else {
-			$mountPoint = '/$user/files/'.ltrim($mountPoint, '/');
+			$mountPoint = '/$user/files/' . ltrim($mountPoint, '/');
 		}
 
 		$mount = array($applicable => array(
 			$mountPoint => array(
 				'class' => $class,
 				'options' => self::encryptPasswords($classOptions))
-			)
+		)
 		);
-		if (! $isPersonal && !is_null($priority)) {
+		if (!$isPersonal && !is_null($priority)) {
 			$mount[$applicable][$mountPoint]['priority'] = $priority;
 		}
 
-		$mountPoints = self::readData($isPersonal ? OCP\User::getUser() : NULL);
+		$mountPoints = self::readData($isPersonal ? OCP\User::getUser() : null);
 		// who else loves multi-dimensional array ?
 		$isNew = !isset($mountPoints[$mountType]) ||
 			!isset($mountPoints[$mountType][$applicable]) ||
@@ -533,10 +577,10 @@ class OC_Mount_Config {
 			}
 		}
 
-		self::writeData($isPersonal ? OCP\User::getUser() : NULL, $mountPoints);
+		self::writeData($isPersonal ? OCP\User::getUser() : null, $mountPoints);
 
 		$result = self::getBackendStatus($class, $classOptions, $isPersonal);
-		if ($result && $isNew) {
+		if ($result === self::STATUS_SUCCESS && $isNew) {
 			\OC_Hook::emit(
 				\OC\Files\Filesystem::CLASSNAME,
 				\OC\Files\Filesystem::signal_create_mount,
@@ -551,13 +595,15 @@ class OC_Mount_Config {
 	}
 
 	/**
-	*
-	* @param string $mountPoint Mount point
-	* @param string $mountType MOUNT_TYPE_GROUP | MOUNT_TYPE_USER
-	* @param string $applicable User or group to remove mount from
-	* @param bool $isPersonal Personal or system mount point
-	* @return bool
-	*/
+	 *
+	 * @param string $mountPoint Mount point
+	 * @param string $mountType MOUNT_TYPE_GROUP | MOUNT_TYPE_USER
+	 * @param string $applicable User or group to remove mount from
+	 * @param bool $isPersonal Personal or system mount point
+	 * @return bool
+	 *
+	 * @deprecated use StoragesService#removeStorage() instead
+	 */
 	public static function removeMountPoint($mountPoint, $mountType, $applicable, $isPersonal = false) {
 		// Verify that the mount point applies for the current user
 		$relMountPoints = $mountPoint;
@@ -565,12 +611,12 @@ class OC_Mount_Config {
 			if ($applicable != OCP\User::getUser()) {
 				return false;
 			}
-			$mountPoint = '/'.$applicable.'/files/'.ltrim($mountPoint, '/');
+			$mountPoint = '/' . $applicable . '/files/' . ltrim($mountPoint, '/');
 		} else {
-			$mountPoint = '/$user/files/'.ltrim($mountPoint, '/');
+			$mountPoint = '/$user/files/' . ltrim($mountPoint, '/');
 		}
 		$mountPoint = \OC\Files\Filesystem::normalizePath($mountPoint);
-		$mountPoints = self::readData($isPersonal ? OCP\User::getUser() : NULL);
+		$mountPoints = self::readData($isPersonal ? OCP\User::getUser() : null);
 		// Remove mount point
 		unset($mountPoints[$mountType][$applicable][$mountPoint]);
 		// Unset parent arrays if empty
@@ -580,7 +626,7 @@ class OC_Mount_Config {
 				unset($mountPoints[$mountType]);
 			}
 		}
-		self::writeData($isPersonal ? OCP\User::getUser() : NULL, $mountPoints);
+		self::writeData($isPersonal ? OCP\User::getUser() : null, $mountPoints);
 		\OC_Hook::emit(
 			\OC\Files\Filesystem::CLASSNAME,
 			\OC\Files\Filesystem::signal_delete_mount,
@@ -616,17 +662,15 @@ class OC_Mount_Config {
 	}
 
 	/**
-	* Read the mount points in the config file into an array
-	* @param string|null $user If not null, personal for $user, otherwise system
-	* @return array
-	*/
-	private static function readData($user = NULL) {
-		$parser = new \OC\ArrayParser();
+	 * Read the mount points in the config file into an array
+	 *
+	 * @param string|null $user If not null, personal for $user, otherwise system
+	 * @return array
+	 */
+	public static function readData($user = null) {
 		if (isset($user)) {
-			$phpFile = OC_User::getHome($user).'/mount.php';
-			$jsonFile = OC_User::getHome($user).'/mount.json';
+			$jsonFile = OC_User::getHome($user) . '/mount.json';
 		} else {
-			$phpFile = OC::$SERVERROOT.'/config/mount.php';
 			$datadir = \OC_Config::getValue('datadirectory', \OC::$SERVERROOT . '/data/');
 			$jsonFile = \OC_Config::getValue('mount_file', $datadir . '/mount.json');
 		}
@@ -635,82 +679,35 @@ class OC_Mount_Config {
 			if (is_array($mountPoints)) {
 				return $mountPoints;
 			}
-		} elseif (is_file($phpFile)) {
-			$mountPoints = $parser->parsePHP(file_get_contents($phpFile));
-			if (is_array($mountPoints)) {
-				return $mountPoints;
-			}
 		}
 		return array();
 	}
 
 	/**
-	* Write the mount points to the config file
-	* @param string|null $user If not null, personal for $user, otherwise system
-	* @param array $data Mount points
-	*/
-	private static function writeData($user, $data) {
+	 * Write the mount points to the config file
+	 *
+	 * @param string|null $user If not null, personal for $user, otherwise system
+	 * @param array $data Mount points
+	 */
+	public static function writeData($user, $data) {
 		if (isset($user)) {
-			$file = OC_User::getHome($user).'/mount.json';
+			$file = OC_User::getHome($user) . '/mount.json';
 		} else {
 			$datadir = \OC_Config::getValue('datadirectory', \OC::$SERVERROOT . '/data/');
 			$file = \OC_Config::getValue('mount_file', $datadir . '/mount.json');
 		}
-		$options = 0;
-		if (defined('JSON_PRETTY_PRINT')) {
-			// only for PHP >= 5.4
-			$options = JSON_PRETTY_PRINT;
-		}
-		$content = json_encode($data, $options);
-		@file_put_contents($file, $content);
-		@chmod($file, 0640);
-	}
 
-	/**
-	 * Returns all user uploaded ssl root certificates
-	 * @return array
-	 */
-	public static function getCertificates() {
-		$path=OC_User::getHome(OC_User::getUser()) . '/files_external/uploads/';
-		\OCP\Util::writeLog('files_external', 'checking path '.$path, \OCP\Util::INFO);
-		if ( ! is_dir($path)) {
-			//path might not exist (e.g. non-standard OC_User::getHome() value)
-			//in this case create full path using 3rd (recursive=true) parameter.
-			mkdir($path, 0777, true);
-		}
-		$result = array();
-		$handle = opendir($path);
-		if(!is_resource($handle)) {
-			return array();
-		}
-		while (false !== ($file = readdir($handle))) {
-			if ($file != '.' && $file != '..') $result[] = $file;
-		}
-		return $result;
-	}
-
-	/**
-	 * creates certificate bundle
-	 */
-	public static function createCertificateBundle() {
-		$path=OC_User::getHome(OC_User::getUser()) . '/files_external';
-
-		$certs = OC_Mount_Config::getCertificates();
-		$fh_certs = fopen($path."/rootcerts.crt", 'w');
-		foreach ($certs as $cert) {
-			$file=$path.'/uploads/'.$cert;
-			$fh = fopen($file, "r");
-			$data = fread($fh, filesize($file));
-			fclose($fh);
-			if (strpos($data, 'BEGIN CERTIFICATE')) {
-				fwrite($fh_certs, $data);
-				fwrite($fh_certs, "\r\n");
+		foreach ($data as &$applicables) {
+			foreach ($applicables as &$mountPoints) {
+				foreach ($mountPoints as &$options) {
+					self::addStorageId($options);
+				}
 			}
 		}
 
-		fclose($fh_certs);
-
-		return true;
+		$content = json_encode($data, JSON_PRETTY_PRINT);
+		@file_put_contents($file, $content);
+		@chmod($file, 0640);
 	}
 
 	/**
@@ -742,7 +739,7 @@ class OC_Mount_Config {
 		return '';
 	}
 
-	private static function addDependency(&$dependencies, $module, $backend, $message=null) {
+	private static function addDependency(&$dependencies, $module, $backend, $message = null) {
 		if (!isset($dependencies[$module])) {
 			$dependencies[$module] = array();
 		}
@@ -767,11 +764,12 @@ class OC_Mount_Config {
 				}
 			}
 
-			if (count($dependencyGroup) > 0) {
+			$dependencyGroupCount = count($dependencyGroup);
+			if ($dependencyGroupCount > 0) {
 				$backends = '';
-				for ($i = 0; $i < count($dependencyGroup); $i++) {
-					if ($i > 0 && $i === count($dependencyGroup) - 1) {
-						$backends .= $l->t(' and ');
+				for ($i = 0; $i < $dependencyGroupCount; $i++) {
+					if ($i > 0 && $i === $dependencyGroupCount - 1) {
+						$backends .= ' ' . $l->t('and') . ' ';
 					} elseif ($i > 0) {
 						$backends .= ', ';
 					}
@@ -785,12 +783,13 @@ class OC_Mount_Config {
 
 	/**
 	 * Returns a dependency missing message
+	 *
 	 * @param OC_L10N $l
 	 * @param string $module
 	 * @param string $backend
 	 * @return string
 	 */
-	private static function getSingleDependencyMessage($l, $module, $backend) {
+	private static function getSingleDependencyMessage(OC_L10N $l, $module, $backend) {
 		switch (strtolower($module)) {
 			case 'curl':
 				return $l->t('<b>Note:</b> The cURL support in PHP is not enabled or installed. Mounting of %s is not possible. Please ask your system administrator to install it.', $backend);
@@ -803,10 +802,11 @@ class OC_Mount_Config {
 
 	/**
 	 * Encrypt passwords in the given config options
+	 *
 	 * @param array $options mount options
 	 * @return array updated options
 	 */
-	private static function encryptPasswords($options) {
+	public static function encryptPasswords($options) {
 		if (isset($options['password'])) {
 			$options['password_encrypted'] = self::encryptPassword($options['password']);
 			// do not unset the password, we want to keep the keys order
@@ -818,10 +818,11 @@ class OC_Mount_Config {
 
 	/**
 	 * Decrypt passwords in the given config options
+	 *
 	 * @param array $options mount options
 	 * @return array updated options
 	 */
-	private static function decryptPasswords($options) {
+	public static function decryptPasswords($options) {
 		// note: legacy options might still have the unencrypted password in the "password" field
 		if (isset($options['password_encrypted'])) {
 			$options['password'] = self::decryptPassword($options['password_encrypted']);
@@ -832,6 +833,7 @@ class OC_Mount_Config {
 
 	/**
 	 * Encrypt a single password
+	 *
 	 * @param string $password plain text password
 	 * @return string encrypted password
 	 */
@@ -844,6 +846,7 @@ class OC_Mount_Config {
 
 	/**
 	 * Decrypts a single password
+	 *
 	 * @param string $encryptedPassword encrypted password
 	 * @return string plain text password
 	 */
@@ -858,6 +861,7 @@ class OC_Mount_Config {
 
 	/**
 	 * Merges mount points
+	 *
 	 * @param array $data Existing mount points
 	 * @param array $mountPoint New mount point
 	 * @param string $mountType
@@ -871,7 +875,8 @@ class OC_Mount_Config {
 				// Merge priorities
 				if (isset($data[$mountType][$applicable][$mountPath])
 					&& isset($data[$mountType][$applicable][$mountPath]['priority'])
-					&& !isset($mountPoint[$applicable][$mountPath]['priority'])) {
+					&& !isset($mountPoint[$applicable][$mountPath]['priority'])
+				) {
 					$mountPoint[$applicable][$mountPath]['priority']
 						= $data[$mountType][$applicable][$mountPath]['priority'];
 				}
@@ -894,7 +899,7 @@ class OC_Mount_Config {
 			include('Crypt/AES.php');
 		}
 		$cipher = new Crypt_AES(CRYPT_AES_MODE_CBC);
-		$cipher->setKey(\OCP\Config::getSystemValue('passwordsalt'));
+		$cipher->setKey(\OC::$server->getConfig()->getSystemValue('passwordsalt', null));
 		return $cipher;
 	}
 
@@ -903,14 +908,71 @@ class OC_Mount_Config {
 	 * This is mostly used to find out whether configurations
 	 * are the same.
 	 */
-	private static function makeConfigHash($config) {
+	public static function makeConfigHash($config) {
 		$data = json_encode(
 			array(
 				'c' => $config['class'],
 				'm' => $config['mountpoint'],
-				'o' => $config['options']
+				'o' => $config['options'],
+				'p' => isset($config['priority']) ? $config['priority'] : -1,
+				'mo' => isset($config['mountOptions']) ? $config['mountOptions'] : [],
 			)
 		);
 		return hash('md5', $data);
+	}
+
+	/**
+	 * Add storage id to the storage configurations that did not have any.
+	 *
+	 * @param string $user user for which to process storage configs
+	 */
+	private static function addStorageIdToConfig($user) {
+		$config = self::readData($user);
+
+		$needUpdate = false;
+		foreach ($config as &$applicables) {
+			foreach ($applicables as &$mountPoints) {
+				foreach ($mountPoints as &$options) {
+					$needUpdate |= !isset($options['storage_id']);
+				}
+			}
+		}
+
+		if ($needUpdate) {
+			self::writeData($user, $config);
+		}
+	}
+
+	/**
+	 * Get storage id from the numeric storage id and set
+	 * it into the given options argument. Only do this
+	 * if there was no storage id set yet.
+	 *
+	 * This might also fail if a storage wasn't fully configured yet
+	 * and couldn't be mounted, in which case this will simply return false.
+	 *
+	 * @param array $options storage options
+	 *
+	 * @return bool true if the storage id was added, false otherwise
+	 */
+	private static function addStorageId(&$options) {
+		if (isset($options['storage_id'])) {
+			return false;
+		}
+
+		$class = $options['class'];
+		try {
+			/** @var \OC\Files\Storage\Storage $storage */
+			$storage = new $class($options['options']);
+			// TODO: introduce StorageConfigException
+		} catch (\Exception $e) {
+			// storage might not be fully configured yet (ex: Dropbox)
+			// note that storage instances aren't supposed to open any connections
+			// in the constructor, so this exception is likely to be a config exception
+			return false;
+		}
+
+		$options['storage_id'] = $storage->getCache()->getNumericStorageId();
+		return true;
 	}
 }
