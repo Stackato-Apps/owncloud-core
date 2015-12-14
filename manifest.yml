@@ -1,6 +1,6 @@
 applications:
 - name: owncloud-core
-  buildpack: https://github.com/heroku/heroku-buildpack-php.git
+  buildpack: https://github.com/heroku/heroku-buildpack-php#v82
   instances: 1
   mem: 128
   services:
