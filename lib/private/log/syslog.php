@@ -4,7 +4,7 @@
  * @author Morris Jobke <hey@morrisjobke.de>
  * @author Thomas Müller <thomas.mueller@tmit.eu>
  *
- * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @copyright Copyright (c) 2016, ownCloud, Inc.
  * @license AGPL-3.0
  *
  * This code is free software: you can redistribute it and/or modify
@@ -23,18 +23,18 @@
 
 class OC_Log_Syslog {
 	static protected $levels = array(
-		OC_Log::DEBUG => LOG_DEBUG,
-		OC_Log::INFO => LOG_INFO,
-		OC_Log::WARN => LOG_WARNING,
-		OC_Log::ERROR => LOG_ERR,
-		OC_Log::FATAL => LOG_CRIT,
+		\OCP\Util::DEBUG => LOG_DEBUG,
+		\OCP\Util::INFO => LOG_INFO,
+		\OCP\Util::WARN => LOG_WARNING,
+		\OCP\Util::ERROR => LOG_ERR,
+		\OCP\Util::FATAL => LOG_CRIT,
 	);
 
 	/**
 	 * Init class data
 	 */
 	public static function init() {
-		openlog('ownCloud', LOG_PID | LOG_CONS, LOG_USER);
+		openlog(\OC::$server->getSystemConfig()->getValue("syslog_tag", "ownCloud"), LOG_PID | LOG_CONS, LOG_USER);
 		// Close at shutdown
 		register_shutdown_function('closelog');
 	}

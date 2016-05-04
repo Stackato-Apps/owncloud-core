@@ -2,12 +2,12 @@
 /**
  * @author Georg Ehrke <georg@owncloud.com>
  * @author Joas Schilling <nickvergessen@owncloud.com>
- * @author Morris Jobke <hey@morrisjobke.de>
  * @author Olivier Paroz <github@oparoz.com>
+ * @author Robin Appelman <icewind@owncloud.com>
  * @author Thomas Müller <thomas.mueller@tmit.eu>
  * @author Thomas Tanghus <thomas@tanghus.net>
  *
- * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @copyright Copyright (c) 2016, ownCloud, Inc.
  * @license AGPL-3.0
  *
  * This code is free software: you can redistribute it and/or modify
@@ -46,13 +46,17 @@ abstract class Image extends Provider {
 
 		$image = new \OC_Image();
 
-		if ($fileInfo['encrypted'] === true) {
+		$useTempFile = $fileInfo->isEncrypted() || !$fileInfo->getStorage()->isLocal();
+		if ($useTempFile) {
 			$fileName = $fileview->toTmpFile($path);
 		} else {
 			$fileName = $fileview->getLocalFile($path);
 		}
 		$image->loadFromFile($fileName);
 		$image->fixOrientation();
+		if ($useTempFile) {
+			unlink($fileName);
+		}
 		if ($image->valid()) {
 			$image->scaleDownToFit($maxX, $maxY);
 

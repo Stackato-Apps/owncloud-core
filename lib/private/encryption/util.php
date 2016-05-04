@@ -3,10 +3,9 @@
  * @author Björn Schießle <schiessle@owncloud.com>
  * @author Jan-Christoph Borchardt <hey@jancborchardt.net>
  * @author Joas Schilling <nickvergessen@owncloud.com>
- * @author Morris Jobke <hey@morrisjobke.de>
  * @author Thomas Müller <thomas.mueller@tmit.eu>
  *
- * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @copyright Copyright (c) 2016, ownCloud, Inc.
  * @license AGPL-3.0
  *
  * This code is free software: you can redistribute it and/or modify
@@ -29,10 +28,8 @@ use OC\Encryption\Exceptions\EncryptionHeaderKeyExistsException;
 use OC\Encryption\Exceptions\EncryptionHeaderToLargeException;
 use OC\Encryption\Exceptions\ModuleDoesNotExistsException;
 use OC\Files\Filesystem;
-use OC\Files\Storage\Wrapper\Encryption;
 use OC\Files\View;
 use OCP\Encryption\IEncryptionModule;
-use OCP\Files\Mount\IMountPoint;
 use OCP\Files\Storage;
 use OCP\IConfig;
 
@@ -59,7 +56,7 @@ class Util {
 	protected $blockSize = 8192;
 
 	/** @var View */
-	protected $view;
+	protected $rootView;
 
 	/** @var array */
 	protected $ocHeaderKeys;
@@ -78,13 +75,13 @@ class Util {
 
 	/**
 	 *
-	 * @param \OC\Files\View $view
+	 * @param View $rootView
 	 * @param \OC\User\Manager $userManager
 	 * @param \OC\Group\Manager $groupManager
 	 * @param IConfig $config
 	 */
 	public function __construct(
-		\OC\Files\View $view,
+		View $rootView,
 		\OC\User\Manager $userManager,
 		\OC\Group\Manager $groupManager,
 		IConfig $config) {
@@ -93,7 +90,7 @@ class Util {
 			self::HEADER_ENCRYPTION_MODULE_KEY
 		];
 
-		$this->view = $view;
+		$this->rootView = $rootView;
 		$this->userManager = $userManager;
 		$this->groupManager = $groupManager;
 		$this->config = $config;
@@ -125,35 +122,6 @@ class Util {
 		}
 
 		return $id;
-	}
-
-	/**
-	 * read header into array
-	 *
-	 * @param string $header
-	 * @return array
-	 */
-	public function readHeader($header) {
-
-		$result = array();
-
-		if (substr($header, 0, strlen(self::HEADER_START)) === self::HEADER_START) {
-			$endAt = strpos($header, self::HEADER_END);
-			if ($endAt !== false) {
-				$header = substr($header, 0, $endAt + strlen(self::HEADER_END));
-
-				// +1 to not start with an ':' which would result in empty element at the beginning
-				$exploded = explode(':', substr($header, strlen(self::HEADER_START)+1));
-
-				$element = array_shift($exploded);
-				while ($element !== self::HEADER_END) {
-					$result[$element] = array_shift($exploded);
-					$element = array_shift($exploded);
-				}
-			}
-		}
-
-		return $result;
 	}
 
 	/**
@@ -196,7 +164,7 @@ class Util {
 
 		while ($dirList) {
 			$dir = array_pop($dirList);
-			$content = $this->view->getDirectoryContent($dir);
+			$content = $this->rootView->getDirectoryContent($dir);
 
 			foreach ($content as $c) {
 				if ($c->getType() === 'dir') {
@@ -361,9 +329,21 @@ class Util {
 	 * @return boolean
 	 */
 	public function isExcluded($path) {
-		$normalizedPath = \OC\Files\Filesystem::normalizePath($path);
+		$normalizedPath = Filesystem::normalizePath($path);
 		$root = explode('/', $normalizedPath, 4);
 		if (count($root) > 1) {
+
+			// detect alternative key storage root
+			$rootDir = $this->getKeyStorageRoot();
+			if ($rootDir !== '' &&
+				0 === strpos(
+					Filesystem::normalizePath($path),
+					Filesystem::normalizePath($rootDir)
+				)
+			) {
+				return true;
+			}
+
 
 			//detect system wide folders
 			if (in_array($root[1], $this->excludedPaths)) {
@@ -393,51 +373,21 @@ class Util {
 	}
 
 	/**
-	 * Wraps the given storage when it is not a shared storage
+	 * set new key storage root
 	 *
-	 * @param string $mountPoint
-	 * @param Storage $storage
-	 * @param IMountPoint $mount
-	 * @return Encryption|Storage
+	 * @param string $root new key store root relative to the data folder
 	 */
-	public function wrapStorage($mountPoint, Storage $storage, IMountPoint $mount) {
-		$parameters = [
-			'storage' => $storage,
-			'mountPoint' => $mountPoint,
-			'mount' => $mount];
-
-		if (!$storage->instanceOfStorage('OC\Files\Storage\Shared')
-			&& !$storage->instanceOfStorage('OCA\Files_Sharing\External\Storage')
-			&& !$storage->instanceOfStorage('OC\Files\Storage\OwnCloud')) {
-
-			$manager = \OC::$server->getEncryptionManager();
-			$user = \OC::$server->getUserSession()->getUser();
-			$logger = \OC::$server->getLogger();
-			$mountManager = Filesystem::getMountManager();
-			$uid = $user ? $user->getUID() : null;
-			$fileHelper = \OC::$server->getEncryptionFilesHelper();
-			$keyStorage = \OC::$server->getEncryptionKeyStorage();
-			$update = new Update(
-				new View(),
-				$this,
-				Filesystem::getMountManager(),
-				$manager,
-				$fileHelper,
-				$uid
-			);
-			return new Encryption(
-				$parameters,
-				$manager,
-				$this,
-				$logger,
-				$fileHelper,
-				$uid,
-				$keyStorage,
-				$update,
-				$mountManager
-			);
-		} else {
-			return $storage;
-		}
+	public function setKeyStorageRoot($root) {
+		$this->config->setAppValue('core', 'encryption_key_storage_root', $root);
 	}
+
+	/**
+	 * get key storage root
+	 *
+	 * @return string key storage root
+	 */
+	public function getKeyStorageRoot() {
+		return $this->config->getAppValue('core', 'encryption_key_storage_root', '');
+	}
+
 }

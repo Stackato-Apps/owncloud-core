@@ -1,6 +1,7 @@
 OC.L10N.register(
     "user_ldap",
     {
+    "Failed to clear the mappings." : "ბმების წაშლის დროს მოხდა შეცდომა",
     "Failed to delete the server configuration" : "შეცდომა სერვერის კონფიგურაციის წაშლისას",
     "The configuration is valid and the connection could be established!" : "კონფიგურაცია მართებულია და კავშირი დამყარდება!",
     "The configuration is valid, but the Bind failed. Please check the server settings and credentials." : "კონფიგურაცია მართებულია, მაგრამ მიერთება ვერ მოხერხდა. გთხოვთ შეამოწმოთ სერვერის პარამეტრები და აუთენთიკაციის პარამეტრები.",
@@ -49,6 +50,7 @@ OC.L10N.register(
     "in bytes" : "ბაიტებში",
     "Email Field" : "იმეილის ველი",
     "User Home Folder Naming Rule" : "მომხმარებლის Home დირექტორიის სახელების დარქმევის წესი",
-    "Leave empty for user name (default). Otherwise, specify an LDAP/AD attribute." : "დატოვეთ ცარიელი მომხმარებლის სახელი (default). სხვა დანარჩენში მიუთითეთ LDAP/AD ატრიბუტი."
+    "Leave empty for user name (default). Otherwise, specify an LDAP/AD attribute." : "დატოვეთ ცარიელი მომხმარებლის სახელი (default). სხვა დანარჩენში მიუთითეთ LDAP/AD ატრიბუტი.",
+    "The DN of the client user with which the bind shall be done, e.g. uid=agent,dc=example,dc=com. For anonymous access, leave DN and Password empty." : "მომხმარებლის DN რომელთანაც უნდა მოხდეს დაკავშირება მოხდება შემდეგნაირად მაგ: uid=agent,dc=example,dc=com. ხოლო ანონიმური დაშვებისთვის, დატოვეთ DN–ის და პაროლის ველები ცარიელი."
 },
 "nplurals=1; plural=0;");

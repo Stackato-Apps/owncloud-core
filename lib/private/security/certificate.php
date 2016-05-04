@@ -4,7 +4,7 @@
  * @author Morris Jobke <hey@morrisjobke.de>
  * @author Robin Appelman <icewind@owncloud.com>
  *
- * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @copyright Copyright (c) 2016, ownCloud, Inc.
  * @license AGPL-3.0
  *
  * This code is free software: you can redistribute it and/or modify
@@ -50,6 +50,13 @@ class Certificate implements ICertificate {
 	public function __construct($data, $name) {
 		$this->name = $name;
 		$gmt = new \DateTimeZone('GMT');
+
+		// If string starts with "file://" ignore the certificate
+		$query = 'file://';
+		if(strtolower(substr($data, 0, strlen($query))) === $query) {
+			throw new \Exception('Certificate could not get parsed.');
+		}
+
 		$info = openssl_x509_parse($data);
 		if(!is_array($info)) {
 			throw new \Exception('Certificate could not get parsed.');

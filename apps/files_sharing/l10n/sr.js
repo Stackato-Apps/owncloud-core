@@ -24,8 +24,8 @@ OC.L10N.register(
     "You can upload into this folder" : "Можете да отпремате у ову фасциклу",
     "No ownCloud installation (7 or higher) found at {remote}" : "Нема оунКлауд инсталације верзије 7 или више на {remote}",
     "Invalid ownCloud url" : "Неисправан оунКлауд УРЛ",
-    "Share" : "Дељење",
     "Shared by" : "Дели",
+    "Sharing" : "Дељење",
     "A file or folder has been <strong>shared</strong>" : "Фајл или фасцикла је <strong>дељен</strong>",
     "A file or folder was shared from <strong>another server</strong>" : "Фајл или фасцикла су дељени са <strong>другог сервера</strong>",
     "A public shared file or folder was <strong>downloaded</strong>" : "Јавно дељени фајл или фасцикла су <strong>преузети</strong>",
@@ -37,9 +37,10 @@ OC.L10N.register(
     "Public shared file %1$s was downloaded" : "Јавно дељени фајл %1$s је преузет",
     "You shared %1$s with %2$s" : "Поделили сте %1$s са %2$s",
     "You shared %1$s with group %2$s" : "Поделили сте %1$s са групом %2$s",
-    "%2$s shared %1$s with you" : "%2$s подели %1$s са вама",
     "You shared %1$s via link" : "Поделили сте %1$s путем везе",
+    "%2$s shared %1$s with you" : "%2$s подели %1$s са вама",
     "Shares" : "Дељења",
+    "Accept" : "Прихвати",
     "This share is password-protected" : "Дељење је заштићено лозинком",
     "The password is wrong. Try again." : "Лозинка је погрешна. Покушајте поново.",
     "Password" : "Лозинка",
@@ -60,6 +61,10 @@ OC.L10N.register(
     "Open documentation" : "Отвори документацију",
     "Allow users on this server to send shares to other servers" : "Дозвољава корисницима овог сервера да шаљу дељења на друге сервере",
     "Allow users on this server to receive shares from other servers" : "Дозвољава корисницима овог сервера да примају дељења са других сервера",
-    "Federated Cloud" : "Здружени облак"
+    "Federated Cloud" : "Здружени облак",
+    "Decline" : "Одбиј",
+    "Federated sharing" : "Здружено дељење",
+    "Public shared file %1$s was downloaded" : "Јавно дељени фајл %1$s је преузет",
+    "Public shared folder %1$s was downloaded" : "Јавно дељена фасцикла %1$s је преузета"
 },
 "nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);");

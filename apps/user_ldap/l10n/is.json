@@ -4,7 +4,10 @@
     "Test Configuration" : "Prúfa uppsetningu",
     "Help" : "Hjálp",
     "Host" : "Netþjónn",
+    "Port" : "Gátt",
     "Password" : "Lykilorð",
-    "Advanced" : "Ítarlegt"
-},"pluralForm" :"nplurals=2; plural=(n % 10 == 1 || n % 100 != 11);"
+    "Continue" : "Halda áfram",
+    "Advanced" : "Ítarlegt",
+    "Server" : "Þjónn"
+},"pluralForm" :"nplurals=2; plural=(n % 10 != 1 || n % 100 == 11);"
 }

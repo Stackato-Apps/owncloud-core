@@ -1,6 +1,10 @@
 OC.L10N.register(
     "files_sharing",
     {
-    "Download" : "Բեռնել"
+    "Cancel" : "Չեղարկել",
+    "Password" : "Գաղտնաբառ",
+    "Name" : "Անուն",
+    "Download" : "Բեռնել",
+    "Download %s" : "Ներբեռնել %s"
 },
 "nplurals=2; plural=(n != 1);");

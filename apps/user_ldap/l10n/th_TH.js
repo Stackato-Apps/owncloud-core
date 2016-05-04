@@ -24,7 +24,7 @@ OC.L10N.register(
     "Could not detect Base DN, please enter it manually." : "ไม่สามารถตรวจสอบ Base DN โปรดเลือกด้วยตนเอง",
     "{nthServer}. Server" : "เซิร์ฟเวอร์ {nthServer}",
     "No object found in the given Base DN. Please revise." : "ไม่พบวัตถุที่กำหนดใน Base DN กรุณาแก้ไข",
-    "More than 1.000 directory entries available." : "มีรายการไดเรกทอรีมากกว่า 1,000 รายการ",
+    "More than 1,000 directory entries available." : "ไดเรกทอรีมีอยู่มากกว่า 1,000 รายการ",
     " entries available within the provided Base DN" : "รายการที่มีอยู่ใน Base DN",
     "An error occurred. Please check the Base DN, as well as connection settings and credentials." : "เกิดข้อผิดพลาด กรุณาตรวจสอบ Base DN เช่นเดียวกับการตั้งค่าการเชื่อมต่อและข้อมูลที่สำคัญ",
     "Do you really want to delete the current Server Configuration?" : "คุณแน่ใจแล้วหรือว่าต้องการลบการกำหนดค่าเซิร์ฟเวอร์ปัจจุบันทิ้งไป?",
@@ -115,7 +115,6 @@ OC.L10N.register(
     "Backup (Replica) Port" : "สำรองข้อมูลพอร์ต (จำลอง) ",
     "Disable Main Server" : "ปิดใช้งานเซิร์ฟเวอร์หลัก",
     "Only connect to the replica server." : "เฉพาะเชื่อมต่อกับเซิร์ฟเวอร์แบบจำลอง",
-    "Case insensitive LDAP server (Windows)" : "กรณีเซิร์ฟเวอร์ LDAP ไม่ตอบสนอง (วินโดว์ส)",
     "Turn off SSL certificate validation." : "ปิดใช้งานการตรวจสอบความถูกต้องของใบรับรองความปลอดภัย SSL",
     "Not recommended, use it for testing only! If connection only works with this option, import the LDAP server's SSL certificate in your %s server." : "ไม่แนะนำ ควรใช้สำหรับการทดสอบเท่านั้น! ถ้าการเชื่อมต่อใช้งานได้เฉพาะกับตัวเลือกนี้ นำเข้าใบรับรอง SSL เซิร์ฟเวอร์ LDAP ในเซิร์ฟเวอร์ %s ของคุณ ",
     "Cache Time-To-Live" : "แคช TTL",
@@ -154,6 +153,8 @@ OC.L10N.register(
     "Username-LDAP User Mapping" : "Username-LDAP ผู้ใช้ Mapping",
     "Usernames are used to store and assign (meta) data. In order to precisely identify and recognize users, each LDAP user will have an internal username. This requires a mapping from username to LDAP user. The created username is mapped to the UUID of the LDAP user. Additionally the DN is cached as well to reduce LDAP interaction, but it is not used for identification. If the DN changes, the changes will be found. The internal username is used all over. Clearing the mappings will have leftovers everywhere. Clearing the mappings is not configuration sensitive, it affects all LDAP configurations! Never clear the mappings in a production environment, only in a testing or experimental stage." : "ชื่อผู้ใช้จะใช้ในการจัดเก็บและกำหนดข้อมูล (เมตา)  เพื่อรู้จักกับผู้ใช้และสามารถระบุได้อย่างแม่นยำ แต่ละ LDAP จะมีชื่อผู้ใช้ภายใน จึงต้องทำ Mapping ให้กับผู้ใช้ LDAP ชื่อผู้ใช้ที่ถูกสร้างขึ้นจะถูกแมปเข้ากับ UUID ของผู้ใช้ LDAP นอกจากนี้ DN ก็จะถูกแคชเช่นกันเพื่อลดการทำงานร่วมกันของ LDAP แต่มันก็ไม่ได้ใช้เพื่อระบุตัวตน หากมีการเปลี่ยนแปลง DN การเปลี่ยนแปลงจะถูกพบในทันที ชื่อผู้ใช้ภายในจะถูกใช้กับทั้งหมด การล้างแมปไม่มีผลต่อการกำหนดค่า LDAP ทั้งหมด! \nและจะเกิดขึ้นเฉพาะในการทดสอบหรือขั้นตอนการทดลอง",
     "Clear Username-LDAP User Mapping" : "ล้าง Username-LDAP ผู้ใช้ Mapping",
-    "Clear Groupname-LDAP Group Mapping" : "ล้าง Groupname-LDAP กลุ่ม Mapping"
+    "Clear Groupname-LDAP Group Mapping" : "ล้าง Groupname-LDAP กลุ่ม Mapping",
+    "Anonymous bind is not allowed. Please provide a User DN and Password." : "บุคคลนิรนามไม่ได้รับอนุญาต กรุณาระบุ DN ของผู้ใช้และรหัสผ่าน",
+    "{nthServer}. Server" : "เซิร์ฟเวอร์ {nthServer}"
 },
 "nplurals=1; plural=0;");

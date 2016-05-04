@@ -22,7 +22,7 @@
     "Could not detect Base DN, please enter it manually." : "Не могу да откријем базни ДН. Унесите га ручно.",
     "{nthServer}. Server" : "{nthServer}. Сервер",
     "No object found in the given Base DN. Please revise." : "Нема објекта за дати базни ДН. Проверите.",
-    "More than 1.000 directory entries available." : "Више од 1000 уноса је доступно.",
+    "More than 1,000 directory entries available." : "Више од 1000 уноса је доступно.",
     " entries available within the provided Base DN" : "уноса доступно за дати базни ДН",
     "An error occurred. Please check the Base DN, as well as connection settings and credentials." : "Грешка. Проверите базни ДН као и поставке везе и акредитиве.",
     "Do you really want to delete the current Server Configuration?" : "Да ли стварно желите да обришете тренутну конфигурацију сервера?",
@@ -76,6 +76,7 @@
     "Verify settings" : "Провери поставке",
     "1. Server" : "1. сервер",
     "%s. Server:" : "%s. Сервер:",
+    "Add a new and blank configuration" : "Додај нову празну поставу",
     "Copy current configuration into new directory binding" : "Копирај тренутну поставу у везивање новог директоријума",
     "Delete the current configuration" : "Обриши тренутне поставке",
     "Host" : "Домаћин",
@@ -112,7 +113,6 @@
     "Backup (Replica) Port" : "Порт Резервне копије (Реплике)",
     "Disable Main Server" : "Онемогући главни сервер",
     "Only connect to the replica server." : "Повезано само на сервер за копирање.",
-    "Case insensitive LDAP server (Windows)" : "LDAP сервер неосетљив на велика и мала слова (Windows)",
     "Turn off SSL certificate validation." : "Искључите потврду ССЛ сертификата.",
     "Not recommended, use it for testing only! If connection only works with this option, import the LDAP server's SSL certificate in your %s server." : "Није препоручено, користите само за тестирање! Ако веза ради само са овом опцијом, увезите SSL сертификате LDAP сервера на ваш %s сервер.",
     "Cache Time-To-Live" : "Трајност кеша",
@@ -151,6 +151,8 @@
     "Username-LDAP User Mapping" : "Username-LDAP мапирање корисника",
     "Usernames are used to store and assign (meta) data. In order to precisely identify and recognize users, each LDAP user will have an internal username. This requires a mapping from username to LDAP user. The created username is mapped to the UUID of the LDAP user. Additionally the DN is cached as well to reduce LDAP interaction, but it is not used for identification. If the DN changes, the changes will be found. The internal username is used all over. Clearing the mappings will have leftovers everywhere. Clearing the mappings is not configuration sensitive, it affects all LDAP configurations! Never clear the mappings in a production environment, only in a testing or experimental stage." : "Корисничка имена се користи за чување и додељивање (мета) података. Да би се прецизно идентификовали и препознавали кориснике, сваки LDAP корисник ће имати локално корисничко име. Ово захтева мапирање од корисничког имена до LDAP корисника. Креирано корисничко име се мапира у UUID LDAP корисника. Поред тога, DN се кешира да смањи LDAP интеракцију, али се не користи за идентификацију. Ако се DN мења, промене се могу наћи. Локално корисничко име се користи свуда. Чишћење мапирања оставља свуда остатке. Чишћење мапирања није осетљиво на конфигурацију, оно утиче на све LDAP конфигурације!  Никада не користит чишћење мапирања у радном окружењу, већ само у тестирању или експерименталној фази.",
     "Clear Username-LDAP User Mapping" : "Очисти Username-LDAP мапирање корисника",
-    "Clear Groupname-LDAP Group Mapping" : "Очисти Groupname-LDAP мапирање група"
+    "Clear Groupname-LDAP Group Mapping" : "Очисти Groupname-LDAP мапирање група",
+    "Anonymous bind is not allowed. Please provide a User DN and Password." : "Анонимно везивање није дозвољено. Дајте кориснички ДН и лозинку.",
+    "{nthServer}. Server" : "{nthServer}. Сервер"
 },"pluralForm" :"nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);"
 }

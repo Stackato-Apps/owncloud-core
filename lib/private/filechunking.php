@@ -5,12 +5,11 @@
  * @author Jörn Friedrich Dreyer <jfd@butonic.de>
  * @author Morris Jobke <hey@morrisjobke.de>
  * @author Robin Appelman <icewind@owncloud.com>
- * @author Scrutinizer Auto-Fixer <auto-fixer@scrutinizer-ci.com>
  * @author Thomas Müller <thomas.mueller@tmit.eu>
  * @author Thomas Tanghus <thomas@tanghus.net>
  * @author Vincent Petry <pvince81@owncloud.com>
  *
- * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @copyright Copyright (c) 2016, ownCloud, Inc.
  * @license AGPL-3.0
  *
  * This code is free software: you can redistribute it and/or modify
@@ -75,21 +74,23 @@ class OC_FileChunking {
 
 	public function isComplete() {
 		$prefix = $this->getPrefix();
-		$parts = 0;
 		$cache = $this->getCache();
-		for($i=0; $i < $this->info['chunkcount']; $i++) {
-			if ($cache->hasKey($prefix.$i)) {
-				$parts ++;
+		$chunkcount = (int)$this->info['chunkcount'];
+
+		for($i=($chunkcount-1); $i >= 0; $i--) {
+			if (!$cache->hasKey($prefix.$i)) {
+				return false;
 			}
 		}
-		return $parts == $this->info['chunkcount'];
+
+		return true;
 	}
 
 	/**
 	 * Assembles the chunks into the file specified by the path.
 	 * Chunks are deleted afterwards.
 	 *
-	 * @param string $f target path
+	 * @param resource $f target path
 	 *
 	 * @return integer assembled file size
 	 *
@@ -105,6 +106,8 @@ class OC_FileChunking {
 			// remove after reading to directly save space
 			$cache->remove($prefix.$i);
 			$count += fwrite($f, $chunk);
+			// let php release the memory to work around memory exhausted error with php 5.6
+			$chunk = null;
 		}
 
 		return $count;
@@ -178,27 +181,26 @@ class OC_FileChunking {
 	 * Assembles the chunks into the file specified by the path.
 	 * Also triggers the relevant hooks and proxies.
 	 *
-	 * @param string $path target path
+	 * @param \OC\Files\Storage\Storage $storage
+	 * @param string $path target path relative to the storage
+	 * @param string $absolutePath
+	 * @return bool assembled file size or false if file could not be created
 	 *
-	 * @return boolean assembled file size or false if file could not be created
-	 *
-	 * @throws \OC\InsufficientStorageException when file could not be fully
-	 * assembled due to lack of free space
+	 * @throws \OC\ServerNotAvailableException
 	 */
-	public function file_assemble($path) {
-		$absolutePath = \OC\Files\Filesystem::normalizePath(\OC\Files\Filesystem::getView()->getAbsolutePath($path));
+	public function file_assemble($storage, $path, $absolutePath) {
 		$data = '';
 		// use file_put_contents as method because that best matches what this function does
 		if (\OC\Files\Filesystem::isValidPath($path)) {
-			$path = \OC\Files\Filesystem::getView()->getRelativePath($absolutePath);
-			$exists = \OC\Files\Filesystem::file_exists($path);
+			$exists = $storage->file_exists($path);
 			$run = true;
+			$hookPath = \OC\Files\Filesystem::getView()->getRelativePath($absolutePath);
 			if(!$exists) {
 				OC_Hook::emit(
 					\OC\Files\Filesystem::CLASSNAME,
 					\OC\Files\Filesystem::signal_create,
 					array(
-						\OC\Files\Filesystem::signal_param_path => $path,
+						\OC\Files\Filesystem::signal_param_path => $hookPath,
 						\OC\Files\Filesystem::signal_param_run => &$run
 					)
 				);
@@ -207,14 +209,14 @@ class OC_FileChunking {
 				\OC\Files\Filesystem::CLASSNAME,
 				\OC\Files\Filesystem::signal_write,
 				array(
-					\OC\Files\Filesystem::signal_param_path => $path,
+					\OC\Files\Filesystem::signal_param_path => $hookPath,
 					\OC\Files\Filesystem::signal_param_run => &$run
 				)
 			);
 			if(!$run) {
 				return false;
 			}
-			$target = \OC\Files\Filesystem::fopen($path, 'w');
+			$target = $storage->fopen($path, 'w');
 			if($target) {
 				$count = $this->assemble($target);
 				fclose($target);
@@ -222,13 +224,13 @@ class OC_FileChunking {
 					OC_Hook::emit(
 						\OC\Files\Filesystem::CLASSNAME,
 						\OC\Files\Filesystem::signal_post_create,
-						array( \OC\Files\Filesystem::signal_param_path => $path)
+						array( \OC\Files\Filesystem::signal_param_path => $hookPath)
 					);
 				}
 				OC_Hook::emit(
 					\OC\Files\Filesystem::CLASSNAME,
 					\OC\Files\Filesystem::signal_post_write,
-					array( \OC\Files\Filesystem::signal_param_path => $path)
+					array( \OC\Files\Filesystem::signal_param_path => $hookPath)
 				);
 				return $count > 0;
 			}else{

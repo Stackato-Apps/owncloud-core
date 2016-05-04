@@ -8,6 +8,8 @@
 
 /**
  * Tests for server check functions
+ *
+ * @group DB
  */
 class Test_Util_CheckServer extends PHPUnit_Framework_TestCase {
 
@@ -53,7 +55,7 @@ class Test_Util_CheckServer extends \Test\TestCase {
 	protected function setUp() {
 		parent::setUp();
 
-		$this->datadir = \OC_Helper::tmpFolder();
+		$this->datadir = \OC::$server->getTempManager()->getTemporaryFolder();
 
 		file_put_contents($this->datadir . '/.ocdata', '');
 		\OC::$server->getSession()->set('checkServer_succeeded', false);
@@ -139,7 +141,7 @@ class Test_Util_CheckServer extends \Test\TestCase {
 
 		$result = \OC_Util::checkServer($this->getConfig(array(
 			'installed' => true,
-			'version' => implode('.', OC_Util::getVersion())
+			'version' => implode('.', \OCP\Util::getVersion())
 		)));
 		$this->assertCount(1, $result);
 	}
@@ -150,7 +152,7 @@ class Test_Util_CheckServer extends \Test\TestCase {
 	public function testDataDirWritable() {
 		$result = \OC_Util::checkServer($this->getConfig(array(
 			'installed' => true,
-			'version' => implode('.', OC_Util::getVersion())
+			'version' => implode('.', \OCP\Util::getVersion())
 		)));
 		$this->assertEmpty($result);
 	}
@@ -166,7 +168,7 @@ class Test_Util_CheckServer extends \Test\TestCase {
 		chmod($this->datadir, 0300);
 		$result = \OC_Util::checkServer($this->getConfig(array(
 			'installed' => true,
-			'version' => implode('.', OC_Util::getVersion())
+			'version' => implode('.', \OCP\Util::getVersion())
 		)));
 		$this->assertCount(1, $result);
 	}
@@ -178,7 +180,7 @@ class Test_Util_CheckServer extends \Test\TestCase {
 		chmod($this->datadir, 0300);
 		$result = \OC_Util::checkServer($this->getConfig(array(
 			'installed' => false,
-			'version' => implode('.', OC_Util::getVersion())
+			'version' => implode('.', \OCP\Util::getVersion())
 		)));
 		chmod($this->datadir, 0700); //needed for cleanup
 		$this->assertEmpty($result);

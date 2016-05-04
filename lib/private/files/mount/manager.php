@@ -3,9 +3,9 @@
  * @author Björn Schießle <schiessle@owncloud.com>
  * @author Morris Jobke <hey@morrisjobke.de>
  * @author Robin Appelman <icewind@owncloud.com>
- * @author Robin McCorkell <rmccorkell@karoshi.org.uk>
+ * @author Robin McCorkell <robin@mccorkell.me.uk>
  *
- * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @copyright Copyright (c) 2016, ownCloud, Inc.
  * @license AGPL-3.0
  *
  * This code is free software: you can redistribute it and/or modify
@@ -25,17 +25,19 @@
 namespace OC\Files\Mount;
 
 use \OC\Files\Filesystem;
+use OCP\Files\Mount\IMountManager;
+use OCP\Files\Mount\IMountPoint;
 
-class Manager {
+class Manager implements IMountManager {
 	/**
 	 * @var MountPoint[]
 	 */
 	private $mounts = array();
 
 	/**
-	 * @param MountPoint $mount
+	 * @param IMountPoint $mount
 	 */
-	public function addMount(MountPoint $mount) {
+	public function addMount(IMountPoint $mount) {
 		$this->mounts[$mount->getMountPoint()] = $mount;
 	}
 

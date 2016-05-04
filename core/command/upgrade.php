@@ -1,13 +1,16 @@
 <?php
 /**
  * @author Andreas Fischer <bantu@owncloud.com>
+ * @author Björn Schießle <schiessle@owncloud.com>
+ * @author Joas Schilling <nickvergessen@owncloud.com>
+ * @author Lukas Reschke <lukas@owncloud.com>
  * @author Morris Jobke <hey@morrisjobke.de>
  * @author Owen Winkler <a_github@midnightcircus.com>
  * @author Steffen Lindner <mail@steffen-lindner.de>
  * @author Thomas Müller <thomas.mueller@tmit.eu>
  * @author Vincent Petry <pvince81@owncloud.com>
  *
- * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @copyright Copyright (c) 2016, ownCloud, Inc.
  * @license AGPL-3.0
  *
  * This code is free software: you can redistribute it and/or modify
@@ -26,14 +29,18 @@
 
 namespace OC\Core\Command;
 
+use OC\Console\TimestampFormatter;
+use OC\ReleaseNotes;
 use OC\Updater;
 use OCP\IConfig;
+use OCP\ILogger;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Question\ConfirmationQuestion;
 
-class Upgrade extends Command {
+class Upgrade extends Base {
 
 	const ERROR_SUCCESS = 0;
 	const ERROR_NOT_INSTALLED = 1;
@@ -42,20 +49,29 @@ class Upgrade extends Command {
 	const ERROR_INVALID_ARGUMENTS = 4;
 	const ERROR_FAILURE = 5;
 
-	/**
-	 * @var IConfig
-	 */
+	/** @var IConfig */
 	private $config;
+
+	/** @var ILogger */
+	private $logger;
+
+	/** @var ReleaseNotes */
+	private $releaseNotes;
 
 	/**
 	 * @param IConfig $config
+	 * @param ILogger $logger
+	 * @param ReleaseNotes $releaseNotes
 	 */
-	public function __construct(IConfig $config) {
+	public function __construct(IConfig $config, ILogger $logger, ReleaseNotes $releaseNotes) {
 		parent::__construct();
 		$this->config = $config;
+		$this->logger = $logger;
+		$this->releaseNotes = $releaseNotes;
 	}
 
 	protected function configure() {
+		parent::configure();
 		$this
 			->setName('upgrade')
 			->setDescription('run upgrade routines after installation of a new release. The release has to be installed before.')
@@ -87,6 +103,19 @@ class Upgrade extends Command {
 	 */
 	protected function execute(InputInterface $input, OutputInterface $output) {
 
+		if ($input->isInteractive()) {
+			$installedVersion = $this->config->getSystemValue('version', '0.0.0');
+			$currentVersion = implode('.', \OCP\Util::getVersion());
+
+			$releaseNotesArray = $this->releaseNotes->getReleaseNotes($installedVersion, $currentVersion);
+			if (!empty($releaseNotesArray)) {
+				$this->writeArrayInOutputFormat($input, $output, $releaseNotesArray);
+				if (!$this->ask($input, $output)){
+					return self::ERROR_SUCCESS;
+				}
+			}
+		}
+
 		$simulateStepEnabled = true;
 		$updateStepEnabled = true;
 		$skip3rdPartyAppsDisable = false;
@@ -110,9 +139,19 @@ class Upgrade extends Command {
 		}
 
 		if(\OC::checkUpgrade(false)) {
+			if (OutputInterface::VERBOSITY_NORMAL < $output->getVerbosity()) {
+				// Prepend each line with a little timestamp
+				$timestampFormatter = new TimestampFormatter($this->config, $output->getFormatter());
+				$output->setFormatter($timestampFormatter);
+			}
+
 			$self = $this;
-			$updater = new Updater(\OC::$server->getHTTPHelper(),
-				\OC::$server->getConfig());
+			$updater = new Updater(
+					\OC::$server->getHTTPHelper(),
+					$this->config,
+					\OC::$server->getIntegrityCodeChecker(),
+					$this->logger
+			);
 
 			$updater->setSimulateStepEnabled($simulateStepEnabled);
 			$updater->setUpdateStepEnabled($updateStepEnabled);
@@ -130,13 +169,21 @@ class Upgrade extends Command {
 			$updater->listen('\OC\Updater', 'updateEnd',
 				function ($success) use($output, $updateStepEnabled, $self) {
 					$mode = $updateStepEnabled ? 'Update' : 'Update simulation';
-					$status = $success ? 'successful' : 'failed' ;
-					$type = $success ? 'info' : 'error';
-					$message = "<$type>$mode $status</$type>";
+					if ($success) {
+						$message = "<info>$mode successful</info>";
+					} else {
+						$message = "<error>$mode failed</error>";
+					}
 					$output->writeln($message);
 				});
+			$updater->listen('\OC\Updater', 'dbUpgradeBefore', function () use($output) {
+				$output->writeln('<info>Updating database schema</info>');
+			});
 			$updater->listen('\OC\Updater', 'dbUpgrade', function () use($output) {
 				$output->writeln('<info>Updated database</info>');
+			});
+			$updater->listen('\OC\Updater', 'dbSimulateUpgradeBefore', function () use($output) {
+				$output->writeln('<info>Checking whether the database schema can be updated (this can take a long time depending on the database size)</info>');
 			});
 			$updater->listen('\OC\Updater', 'dbSimulateUpgrade', function () use($output) {
 				$output->writeln('<info>Checked database schema update</info>');
@@ -156,6 +203,12 @@ class Upgrade extends Command {
 			$updater->listen('\OC\Updater', 'repairError', function ($app) use($output) {
 				$output->writeln('<error>Repair error: ' . $app . '</error>');
 			});
+			$updater->listen('\OC\Updater', 'appUpgradeCheckBefore', function () use ($output) {
+				$output->writeln('<info>Checking updates of apps</info>');
+			});
+			$updater->listen('\OC\Updater', 'appSimulateUpdate', function ($app) use ($output) {
+				$output->writeln("<info>Checking whether the database schema for <$app> can be updated (this can take a long time depending on the database size)</info>");
+			});
 			$updater->listen('\OC\Updater', 'appUpgradeCheck', function () use ($output) {
 				$output->writeln('<info>Checked database schema update for apps</info>');
 			});
@@ -168,6 +221,27 @@ class Upgrade extends Command {
 			$updater->listen('\OC\Updater', 'failure', function ($message) use($output, $self) {
 				$output->writeln("<error>$message</error>");
 			});
+			$updater->listen('\OC\Updater', 'setDebugLogLevel', function ($logLevel, $logLevelName) use($output) {
+				$output->writeln("<info>Set log level to debug</info>");
+			});
+			$updater->listen('\OC\Updater', 'resetLogLevel', function ($logLevel, $logLevelName) use($output) {
+				$output->writeln("<info>Reset log level</info>");
+			});
+			$updater->listen('\OC\Updater', 'startCheckCodeIntegrity', function () use($output) {
+				$output->writeln("<info>Starting code integrity check...</info>");
+			});
+			$updater->listen('\OC\Updater', 'finishedCheckCodeIntegrity', function () use($output) {
+				$output->writeln("<info>Finished code integrity check</info>");
+			});
+
+			if(OutputInterface::VERBOSITY_NORMAL < $output->getVerbosity()) {
+				$updater->listen('\OC\Updater', 'repairInfo', function ($message) use($output) {
+					$output->writeln('<info>Repair info: ' . $message . '</info>');
+				});
+				$updater->listen('\OC\Updater', 'repairStep', function ($message) use($output) {
+					$output->writeln('<info>Repair step: ' . $message . '</info>');
+				});
+			}
 
 			$success = $updater->upgrade();
 
@@ -209,4 +283,17 @@ class Upgrade extends Command {
 			);
 		}
 	}
+
+	/**
+	 * Ask for confirmation
+	 * @param InputInterface $input
+	 * @param OutputInterface $output
+	 * @return bool
+	 */
+	public function ask(InputInterface $input, OutputInterface $output){
+		$helper = $this->getHelper('question');
+		$question = new ConfirmationQuestion('Continue with update (y/n)' . PHP_EOL, true);
+		return $helper->ask($input, $output, $question);
+	}
+
 }

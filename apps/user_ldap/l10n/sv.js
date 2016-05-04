@@ -64,7 +64,6 @@ OC.L10N.register(
     "Backup (Replica) Port" : "Säkerhetskopierins-port (Replika)",
     "Disable Main Server" : "Inaktivera huvudserver",
     "Only connect to the replica server." : "Anslut endast till replikaservern.",
-    "Case insensitive LDAP server (Windows)" : "om okänslig LDAP-server (Windows)",
     "Turn off SSL certificate validation." : "Stäng av verifiering av SSL-certifikat.",
     "Not recommended, use it for testing only! If connection only works with this option, import the LDAP server's SSL certificate in your %s server." : "Rekommenderas inte, använd endast för test! Om anslutningen bara fungerar med denna inställning behöver du importera LDAP-serverns SSL-certifikat till din %s server.",
     "Cache Time-To-Live" : "Cache Time-To-Live",
@@ -102,6 +101,8 @@ OC.L10N.register(
     "UUID Attribute for Groups:" : "UUID-attribut för grupper:",
     "Username-LDAP User Mapping" : "Användarnamn-LDAP användarmappning",
     "Clear Username-LDAP User Mapping" : "Rensa användarnamn-LDAP användarmappning",
-    "Clear Groupname-LDAP Group Mapping" : "Rensa gruppnamn-LDAP gruppmappning"
+    "Clear Groupname-LDAP Group Mapping" : "Rensa gruppnamn-LDAP gruppmappning",
+    "The DN of the client user with which the bind shall be done, e.g. uid=agent,dc=example,dc=com. For anonymous access, leave DN and Password empty." : "DN för användaren som skall användas, t.ex. uid=agent, dc=example, dc=com. För anonym åtkomst, lämna DN och lösenord tomt.",
+    "{nthServer}. Server" : "{nthServer}. Server"
 },
 "nplurals=2; plural=(n != 1);");

@@ -25,8 +25,12 @@ OC.L10N.register(
     "Invalid private key for Encryption App. Please update your private key password in your personal settings to recover access to your encrypted files." : "Ungültiger privater Schlüssel für die Verschlüsselungs-App. Bitte aktualisieren Sie Ihr privates Schlüsselpasswort, um den Zugriff auf Ihre verschlüsselten Dateien wiederherzustellen.",
     "Encryption App is enabled but your keys are not initialized, please log-out and log-in again" : "Verschlüsselung-App ist aktiviert, aber Ihre Schlüssel sind nicht initialisiert. Bitte nochmals ab- und wieder anmelden.",
     "Encryption App is enabled and ready" : "Verschlüsselungs-App ist aktiviert und bereit",
+    "Bad Signature" : "Falsche Signatur",
+    "Missing Signature" : "Fehlende Signatur",
     "Can not decrypt this file, probably this is a shared file. Please ask the file owner to reshare the file with you." : "Diese Datei kann nicht entschlüsselt werden, es handelt sich wahrscheinlich um eine geteilte Datei. Bitte kontaktieren Sie den Eigentümer der Datei und bitten Sie darum, die Datei noch einmal mit Ihnen zu teilen.",
     "Can not read this file, probably this is a shared file. Please ask the file owner to reshare the file with you." : "Diese Datei kann nicht gelesen werden, es handelt sich wahrscheinlich um eine geteilte Datei. Bitte kontaktieren Sie den Eigentümer der Datei und bitten Sie darum, die Datei noch einmal mit Ihnen zu teilen.",
+    "The share will expire on %s." : "Die Freigabe wird am %s ablaufen.",
+    "Cheers!" : "Noch einen schönen Tag!",
     "Enable recovery key" : "Wiederherstellungsschlüssel aktivieren",
     "Disable recovery key" : "Wiederherstellungsschlüssel deaktivieren",
     "The recovery key is an extra encryption key that is used to encrypt files. It allows recovery of a user's files if the user forgets his or her password." : "Der Wiederherstellungsschlüssel ist ein zusätzlicher Verschlüsselungsschlüssel, der zum Verschlüsseln von Dateien benutzt wird. Er erlaubt die Wiederherstellung von Benutzerdateien auch dann, wenn der Benutzer sein Passwort vergessen hat.",
@@ -47,6 +51,7 @@ OC.L10N.register(
     "Enable password recovery:" : "Die Passwort-Wiederherstellung aktivieren:",
     "Enabling this option will allow you to reobtain access to your encrypted files in case of password loss" : "Durch die Aktivierung dieser Option haben Sie die Möglichkeit, wieder auf Ihre verschlüsselten Dateien zugreifen zu können, wenn Sie Ihr Passwort verloren haben.",
     "Enabled" : "Aktiviert",
-    "Disabled" : "Deaktiviert"
+    "Disabled" : "Deaktiviert",
+    "one-time password for server-side-encryption" : "Einmalpasswort für Serverseitige Verschlüsselung"
 },
 "nplurals=2; plural=(n != 1);");

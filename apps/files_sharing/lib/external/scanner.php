@@ -2,10 +2,11 @@
 /**
  * @author Lukas Reschke <lukas@owncloud.com>
  * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Olivier Paroz <github@oparoz.com>
  * @author Robin Appelman <icewind@owncloud.com>
  * @author Vincent Petry <pvince81@owncloud.com>
  *
- * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @copyright Copyright (c) 2016, ownCloud, Inc.
  * @license AGPL-3.0
  *
  * This code is free software: you can redistribute it and/or modify
@@ -35,6 +36,10 @@ class Scanner extends \OC\Files\Cache\Scanner {
 
 	/** {@inheritDoc} */
 	public function scan($path, $recursive = self::SCAN_RECURSIVE, $reuse = -1, $lock = true) {
+		if(!$this->storage->remoteIsOwnCloud()) {
+			return parent::scan($path, $recursive, $recursive, $lock);
+		}
+
 		$this->scanAll();
 	}
 
@@ -48,9 +53,10 @@ class Scanner extends \OC\Files\Cache\Scanner {
 	 * @param int $reuseExisting
 	 * @param int $parentId
 	 * @param array | null $cacheData existing data in the cache for the file to be scanned
+	 * @param bool $lock set to false to disable getting an additional read lock during scanning
 	 * @return array an array of metadata of the scanned file
 	 */
-	public function scanFile($file, $reuseExisting = 0, $parentId = -1, $cacheData = null) {
+	public function scanFile($file, $reuseExisting = 0, $parentId = -1, $cacheData = null, $lock = true) {
 		try {
 			return parent::scanFile($file, $reuseExisting);
 		} catch (ForbiddenException $e) {

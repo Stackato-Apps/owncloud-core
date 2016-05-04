@@ -59,7 +59,6 @@ OC.L10N.register(
     "Backup (Replica) Port" : "ব্যাকআপ (নকল) পোর্ট",
     "Disable Main Server" : "মূল সার্ভারকে অকার্যকর কর",
     "Only connect to the replica server." : "শুধুমাত্র নকল সার্ভারে সংযোগ দাও।",
-    "Case insensitive LDAP server (Windows)" : "বর্ণ অসংবেদী LDAP  সার্ভার (উইন্ডোজ)",
     "Turn off SSL certificate validation." : "SSL সনদপত্র যাচাইকরণ বন্ধ রাক।",
     "Cache Time-To-Live" : "ক্যাশে টাইম-টু-লিভ",
     "in seconds. A change empties the cache." : "সেকেন্ডে। কোন পরিবর্তন ক্যাসে খালি করবে।",
@@ -77,6 +76,8 @@ OC.L10N.register(
     "Quota Default" : "পূর্বনির্ধারিত কোটা",
     "in bytes" : "বাইটে",
     "Email Field" : "ইমেইল ক্ষেত্র",
-    "Leave empty for user name (default). Otherwise, specify an LDAP/AD attribute." : "ব্যবহারকারী নামের জন্য ফাঁকা রাখুন (পূর্বনির্ধারিত)। অন্যথায়, LDAP/AD বৈশিষ্ট্য নির্ধারণ করুন।"
+    "Leave empty for user name (default). Otherwise, specify an LDAP/AD attribute." : "ব্যবহারকারী নামের জন্য ফাঁকা রাখুন (পূর্বনির্ধারিত)। অন্যথায়, LDAP/AD বৈশিষ্ট্য নির্ধারণ করুন।",
+    "The DN of the client user with which the bind shall be done, e.g. uid=agent,dc=example,dc=com. For anonymous access, leave DN and Password empty." : "The DN of the client user with which the bind shall be done, e.g. uid=agent,dc=example,dc=com. পরিচয় গোপন রেখে অধিগমনের জন্য  DN এবং কূটশব্দটি ফাঁকা রাখুন।",
+    "{nthServer}. Server" : "{nthServer}. সার্ভার"
 },
 "nplurals=2; plural=(n != 1);");

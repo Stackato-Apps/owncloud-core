@@ -6,10 +6,10 @@
  * @author Joas Schilling <nickvergessen@owncloud.com>
  * @author Jörn Friedrich Dreyer <jfd@butonic.de>
  * @author Morris Jobke <hey@morrisjobke.de>
- * @author Robin McCorkell <rmccorkell@karoshi.org.uk>
+ * @author Robin McCorkell <robin@mccorkell.me.uk>
  * @author Thomas Müller <thomas.mueller@tmit.eu>
  *
- * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @copyright Copyright (c) 2016, ownCloud, Inc.
  * @license AGPL-3.0
  *
  * This code is free software: you can redistribute it and/or modify
@@ -41,18 +41,6 @@ namespace OCP;
  * @since 4.0.0
  */
 class App {
-	/**
-	 * Makes ownCloud aware of this app
-	 * @param array $data with all information
-	 * @return boolean
-	 *
-	 * @deprecated 4.5.0 This method is deprecated. Do not call it anymore.
-	 * It'll remain in our public API for compatibility reasons.
-	 *
-	 */
-	public static function register( $data ) {
-		return true; // don't do anything
-	}
 
 	/**
 	 * Adds an entry to the navigation
@@ -94,7 +82,8 @@ class App {
 	 * @since 4.0.0
 	 */
 	public static function setActiveNavigationEntry( $id ) {
-		return \OC_App::setActiveNavigationEntry( $id );
+		\OC::$server->getNavigationManager()->setActiveEntry($id);
+		return true;
 	}
 
 	/**
@@ -123,7 +112,7 @@ class App {
 	 * Read app metadata from the info.xml file
 	 * @param string $app id of the app or the path of the info.xml file
 	 * @param boolean $path (optional)
-	 * @return array
+	 * @return array|null
 	 * @since 4.0.0
 	*/
 	public static function getAppInfo( $app, $path=false ) {
@@ -147,9 +136,9 @@ class App {
 	 * @param string $app
 	 * @return void
 	 * @since 4.0.0
+	 * @deprecated 9.0.0 ownCloud core will handle disabled apps and redirects to valid URLs
 	*/
 	public static function checkAppEnabled( $app ) {
-		\OC_Util::checkAppEnabled( $app );
 	}
 
 	/**

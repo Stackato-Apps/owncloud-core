@@ -22,6 +22,13 @@
 
 namespace Test\Files\Storage;
 
+/**
+ * Class Local
+ *
+ * @group DB
+ *
+ * @package Test\Files\Storage
+ */
 class Local extends Storage {
 	/**
 	 * @var string tmpDir
@@ -31,7 +38,7 @@ class Local extends Storage {
 	protected function setUp() {
 		parent::setUp();
 
-		$this->tmpDir = \OC_Helper::tmpFolder();
+		$this->tmpDir = \OC::$server->getTempManager()->getTemporaryFolder();
 		$this->instance = new \OC\Files\Storage\Local(array('datadir' => $this->tmpDir));
 	}
 
@@ -62,6 +69,20 @@ class Local extends Storage {
 		$this->instance->file_put_contents('test.txt', 'bar');
 		$etag2 = $this->instance->getETag('test.txt');
 		$this->assertNotEquals($etag1, $etag2);
+	}
+
+	/**
+	 * @expectedException \InvalidArgumentException
+	 */
+	public function testInvalidArgumentsEmptyArray() {
+		new \OC\Files\Storage\Local([]);
+	}
+
+	/**
+	 * @expectedException \InvalidArgumentException
+	 */
+	public function testInvalidArgumentsNoArray() {
+		new \OC\Files\Storage\Local(null);
 	}
 }
 

@@ -24,7 +24,6 @@ OC.L10N.register(
     "Could not detect Base DN, please enter it manually." : "Non foi posíbel detectar o DN base, introdúzao manualmente.",
     "{nthServer}. Server" : "{nthServer}. Servidor",
     "No object found in the given Base DN. Please revise." : "Non se atopou o obxecto no DN base solicitado. Revíseo.",
-    "More than 1.000 directory entries available." : "Dispoñíbeis máis de 1.000 entradas de directorio.",
     " entries available within the provided Base DN" : "entradas dispoñíbeis no DN base fornecido",
     "An error occurred. Please check the Base DN, as well as connection settings and credentials." : "Produciuse un erro. Comprobe o DN base, os axustes de conexión e as credenciais.",
     "Do you really want to delete the current Server Configuration?" : "Confirma que quere eliminar a configuración actual do servidor?",
@@ -115,7 +114,6 @@ OC.L10N.register(
     "Backup (Replica) Port" : "Porto da copia de seguranza (Réplica)",
     "Disable Main Server" : "Desactivar o servidor principal",
     "Only connect to the replica server." : "Conectar só co servidor de réplica.",
-    "Case insensitive LDAP server (Windows)" : "Servidor LDAP non sensíbel a maiúsculas (Windows)",
     "Turn off SSL certificate validation." : "Desactiva a validación do certificado SSL.",
     "Not recommended, use it for testing only! If connection only works with this option, import the LDAP server's SSL certificate in your %s server." : "Non recomendado, utilizar só para probas! Se a conexión só funciona con esta opción importa o certificado SSL do servidor LDAP no seu servidor %s.",
     "Cache Time-To-Live" : "Tempo de persistencia da caché",
@@ -154,6 +152,8 @@ OC.L10N.register(
     "Username-LDAP User Mapping" : "Asignación do usuario ao «nome de usuario LDAP»",
     "Usernames are used to store and assign (meta) data. In order to precisely identify and recognize users, each LDAP user will have an internal username. This requires a mapping from username to LDAP user. The created username is mapped to the UUID of the LDAP user. Additionally the DN is cached as well to reduce LDAP interaction, but it is not used for identification. If the DN changes, the changes will be found. The internal username is used all over. Clearing the mappings will have leftovers everywhere. Clearing the mappings is not configuration sensitive, it affects all LDAP configurations! Never clear the mappings in a production environment, only in a testing or experimental stage." : "Os nomes de usuario empréganse para almacenar e asignar (meta) datos. Coa fin de identificar con precisión e recoñecer aos usuarios, cada usuario LDAP terá un nome de usuario interno. Isto require unha asignación do nome de usuario a usuario LDAP. O nome de usuario creado asignase ao UUID do usuario LDAP. Ademais o DN almacenase na caché, para así reducir a interacción do LDAP, mais non se utiliza para a identificación. Se o DN cambia, os cambios poden ser atopados. O nome interno do usuario utilizase para todo. A limpeza das asignacións deixará rastros en todas partes. A limpeza das asignacións non é sensíbel á configuración, afecta a todas as configuracións de LDAP! Non limpar nunca as asignacións nun entorno de produción. Limpar as asignacións só en fases de proba ou experimentais.",
     "Clear Username-LDAP User Mapping" : "Limpar a asignación do usuario ao «nome de usuario LDAP»",
-    "Clear Groupname-LDAP Group Mapping" : "Limpar a asignación do grupo ao «nome de grupo LDAP»"
+    "Clear Groupname-LDAP Group Mapping" : "Limpar a asignación do grupo ao «nome de grupo LDAP»",
+    "Anonymous bind is not allowed. Please provide a User DN and Password." : "O vínculo anónimo non está permitido. Forneza un DN de usuario e un contrasinal.",
+    "{nthServer}. Server" : "{nthServer}. Servidor"
 },
 "nplurals=2; plural=(n != 1);");

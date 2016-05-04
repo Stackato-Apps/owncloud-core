@@ -3,9 +3,11 @@
  * @author Björn Schießle <schiessle@owncloud.com>
  * @author Georg Ehrke <georg@owncloud.com>
  * @author Lukas Reschke <lukas@owncloud.com>
+ * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Roeland Jago Douma <rullzer@owncloud.com>
  * @author Vincent Petry <pvince81@owncloud.com>
  *
- * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @copyright Copyright (c) 2016, ownCloud, Inc.
  * @license AGPL-3.0
  *
  * This code is free software: you can redistribute it and/or modify
@@ -35,13 +37,13 @@ $scalingUp = array_key_exists('scalingup', $_GET) ? (bool) $_GET['scalingup'] : 
 
 if($file === '') {
 	\OC_Response::setStatus(400); //400 Bad Request
-	\OC_Log::write('core-preview', 'No file parameter was passed', \OC_Log::DEBUG);
+	\OCP\Util::writeLog('core-preview', 'No file parameter was passed', \OCP\Util::DEBUG);
 	exit;
 }
 
 if($maxX === 0 || $maxY === 0) {
 	\OC_Response::setStatus(400); //400 Bad Request
-	\OC_Log::write('core-preview', 'x and/or y set to 0', \OC_Log::DEBUG);
+	\OCP\Util::writeLog('core-preview', 'x and/or y set to 0', \OCP\Util::DEBUG);
 	exit;
 }
 
@@ -61,7 +63,7 @@ try{
 				$fileName = substr($fileName, 0, $i);
 			}
 		}
-		$mimetype = \OC_Helper::getFileNameMimeType($fileName);
+		$mimetype = \OC::$server->getMimeTypeDetector()->detectPath($fileName);
 	}
 	$preview->setMimetype($mimetype);
 	$preview->setMaxX($maxX);
@@ -71,5 +73,5 @@ try{
 	$preview->showPreview();
 }catch(\Exception $e) {
 	\OC_Response::setStatus(500);
-	\OC_Log::write('core', $e->getmessage(), \OC_Log::DEBUG);
+	\OCP\Util::writeLog('core', $e->getmessage(), \OCP\Util::DEBUG);
 }

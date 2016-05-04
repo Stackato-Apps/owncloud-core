@@ -7,11 +7,11 @@
  * @author Joas Schilling <nickvergessen@owncloud.com>
  * @author Jörn Friedrich Dreyer <jfd@butonic.de>
  * @author Morris Jobke <hey@morrisjobke.de>
- * @author Robin McCorkell <rmccorkell@karoshi.org.uk>
+ * @author Robin McCorkell <robin@mccorkell.me.uk>
  * @author Thomas Müller <thomas.mueller@tmit.eu>
  * @author Vincent Petry <pvince81@owncloud.com>
  *
- * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @copyright Copyright (c) 2016, ownCloud, Inc.
  * @license AGPL-3.0
  *
  * This code is free software: you can redistribute it and/or modify
@@ -45,7 +45,7 @@ namespace OCP;
  * @param string $image
  * @return string to the image
  *
- * @see OC_Helper::imagePath
+ * @see \OCP\IURLGenerator::imagePath
  * @deprecated 8.0.0 Use \OCP\Template::image_path() instead
  */
 function image_path( $app, $image ) {
@@ -137,12 +137,14 @@ function html_select_options($options, $selected, $params=array()) {
 /**
  * This class provides the template system for owncloud. You can use it to load
  * specific templates, add data and generate the html code
+ *
+ * @since 8.0.0
  */
 class Template extends \OC_Template {
 	/**
 	 * Make OC_Helper::imagePath available as a simple function
 	 *
-	 * @see OC_Helper::imagePath
+	 * @see \OCP\IURLGenerator::imagePath
 	 *
 	 * @param string $app
 	 * @param string $image

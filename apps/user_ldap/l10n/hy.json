@@ -1,4 +1,7 @@
 { "translations": {
-    "Save" : "Պահպանել"
+    "Groups" : "Խմբեր",
+    "Password" : "Գաղտնաբառ",
+    "Continue" : "Շարունակել",
+    "Help" : "Օգնություն"
 },"pluralForm" :"nplurals=2; plural=(n != 1);"
 }

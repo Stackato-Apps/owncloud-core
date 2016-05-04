@@ -5,12 +5,16 @@
  * @author Joas Schilling <nickvergessen@owncloud.com>
  * @author Jörn Friedrich Dreyer <jfd@butonic.de>
  * @author Lukas Reschke <lukas@owncloud.com>
+ * @author Mitar <mitar.git@tnode.com>
  * @author Morris Jobke <hey@morrisjobke.de>
+ * @author Robin Appelman <icewind@owncloud.com>
+ * @author Robin McCorkell <robin@mccorkell.me.uk>
+ * @author Roeland Jago Douma <rullzer@owncloud.com>
  * @author Thomas Müller <thomas.mueller@tmit.eu>
  * @author Thomas Tanghus <thomas@tanghus.net>
  * @author Vincent Petry <pvince81@owncloud.com>
  *
- * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @copyright Copyright (c) 2016, ownCloud, Inc.
  * @license AGPL-3.0
  *
  * This code is free software: you can redistribute it and/or modify
@@ -29,9 +33,12 @@
 
 namespace OC\AppFramework\Http;
 
+use OC\Security\CSRF\CsrfToken;
+use OC\Security\CSRF\CsrfTokenManager;
 use OC\Security\TrustedDomainHelper;
 use OCP\IConfig;
 use OCP\IRequest;
+use OCP\Security\ICrypto;
 use OCP\Security\ISecureRandom;
 
 /**
@@ -40,10 +47,22 @@ use OCP\Security\ISecureRandom;
  */
 class Request implements \ArrayAccess, \Countable, IRequest {
 
-	const USER_AGENT_IE = '/MSIE/';
+	const USER_AGENT_IE = '/(MSIE)|(Trident)/';
+	const USER_AGENT_IE_8 = '/MSIE 8.0/';
+	// Microsoft Edge User Agent from https://msdn.microsoft.com/en-us/library/hh869301(v=vs.85).aspx
+	const USER_AGENT_MS_EDGE = '/^Mozilla\/5\.0 \([^)]+\) AppleWebKit\/[0-9.]+ \(KHTML, like Gecko\) Chrome\/[0-9.]+ (Mobile Safari|Safari)\/[0-9.]+ Edge\/[0-9.]+$/';
+	// Firefox User Agent from https://developer.mozilla.org/en-US/docs/Web/HTTP/Gecko_user_agent_string_reference
+	const USER_AGENT_FIREFOX = '/^Mozilla\/5\.0 \([^)]+\) Gecko\/[0-9.]+ Firefox\/[0-9.]+$/';
+	// Chrome User Agent from https://developer.chrome.com/multidevice/user-agent
+	const USER_AGENT_CHROME = '/^Mozilla\/5\.0 \([^)]+\) AppleWebKit\/[0-9.]+ \(KHTML, like Gecko\) Chrome\/[0-9.]+ (Mobile Safari|Safari)\/[0-9.]+$/';
+	// Safari User Agent from http://www.useragentstring.com/pages/Safari/
+	const USER_AGENT_SAFARI = '/^Mozilla\/5\.0 \([^)]+\) AppleWebKit\/[0-9.]+ \(KHTML, like Gecko\) Version\/[0-9.]+ Safari\/[0-9.A-Z]+$/';
 	// Android Chrome user agent: https://developers.google.com/chrome/mobile/docs/user-agent
 	const USER_AGENT_ANDROID_MOBILE_CHROME = '#Android.*Chrome/[.0-9]*#';
 	const USER_AGENT_FREEBOX = '#^Mozilla/5\.0$#';
+	const USER_AGENT_OWNCLOUD_IOS = '/^Mozilla\/5\.0 \(iOS\) ownCloud\-iOS.*$/';
+	const USER_AGENT_OWNCLOUD_ANDROID = '/^Mozilla\/5\.0 \(Android\) ownCloud\-android.*$/';
+	const USER_AGENT_OWNCLOUD_DESKTOP = '/^Mozilla\/5\.0 \([A-Za-z ]+\) (mirall|csyncoC)\/.*$/';
 	const REGEX_LOCALHOST = '/^(127\.0\.0\.1|localhost)$/';
 
 	protected $inputStream;
@@ -67,6 +86,13 @@ class Request implements \ArrayAccess, \Countable, IRequest {
 	protected $config;
 	/** @var string */
 	protected $requestId = '';
+	/** @var ICrypto */
+	protected $crypto;
+	/** @var CsrfTokenManager|null */
+	protected $csrfTokenManager;
+
+	/** @var bool */
+	protected $contentDecoded = false;
 
 	/**
 	 * @param array $vars An associative array with the following optional values:
@@ -81,17 +107,20 @@ class Request implements \ArrayAccess, \Countable, IRequest {
 	 *        - string|false 'requesttoken' the requesttoken or false when not available
 	 * @param ISecureRandom $secureRandom
 	 * @param IConfig $config
+	 * @param CsrfTokenManager|null $csrfTokenManager
 	 * @param string $stream
 	 * @see http://www.php.net/manual/en/reserved.variables.php
 	 */
 	public function __construct(array $vars=array(),
 								ISecureRandom $secureRandom = null,
 								IConfig $config,
-								$stream='php://input') {
+								CsrfTokenManager $csrfTokenManager = null,
+								$stream = 'php://input') {
 		$this->inputStream = $stream;
 		$this->items['params'] = array();
 		$this->secureRandom = $secureRandom;
 		$this->config = $config;
+		$this->csrfTokenManager = $csrfTokenManager;
 
 		if(!array_key_exists('method', $vars)) {
 			$vars['method'] = 'GET';
@@ -101,27 +130,6 @@ class Request implements \ArrayAccess, \Countable, IRequest {
 			$this->items[$name] = isset($vars[$name])
 				? $vars[$name]
 				: array();
-		}
-
-		// 'application/json' must be decoded manually.
-		if (strpos($this->getHeader('Content-Type'), 'application/json') !== false) {
-			$params = json_decode(file_get_contents($this->inputStream), true);
-			if(count($params) > 0) {
-				$this->items['params'] = $params;
-				if($vars['method'] === 'POST') {
-					$this->items['post'] = $params;
-				}
-			}
-		// Handle application/x-www-form-urlencoded for methods other than GET
-		// or post correctly
-		} elseif($vars['method'] !== 'GET'
-				&& $vars['method'] !== 'POST'
-				&& strpos($this->getHeader('Content-Type'), 'application/x-www-form-urlencoded') !== false) {
-
-			parse_str(file_get_contents($this->inputStream), $params);
-			if(is_array($params)) {
-				$this->items['params'] = $params;
-			}
 		}
 
 		$this->items['parameters'] = array_merge(
@@ -231,24 +239,19 @@ class Request implements \ArrayAccess, \Countable, IRequest {
 				if($this->method !== strtoupper($name)) {
 					throw new \LogicException(sprintf('%s cannot be accessed in a %s request.', $name, $this->method));
 				}
+				return $this->getContent();
 			case 'files':
 			case 'server':
 			case 'env':
 			case 'cookies':
+			case 'urlParams':
+			case 'method':
+				return isset($this->items[$name])
+					? $this->items[$name]
+					: null;
 			case 'parameters':
 			case 'params':
-			case 'urlParams':
-				if(in_array($name, array('put', 'patch'))) {
-					return $this->getContent();
-				} else {
-					return isset($this->items[$name])
-						? $this->items[$name]
-						: null;
-				}
-				break;
-			case 'method':
-				return $this->items['method'];
-				break;
+				return $this->getContent();
 			default;
 				return isset($this[$name])
 					? $this[$name]
@@ -261,6 +264,9 @@ class Request implements \ArrayAccess, \Countable, IRequest {
 	 * @return bool
 	 */
 	public function __isset($name) {
+		if (in_array($name, $this->allowedKeys, true)) {
+			return true;
+		}
 		return isset($this->items['parameters'][$name]);
 	}
 
@@ -390,17 +396,55 @@ class Request implements \ArrayAccess, \Countable, IRequest {
 			$this->content = false;
 			return fopen($this->inputStream, 'rb');
 		} else {
-			return $this->parameters;
+			$this->decodeContent();
+			return $this->items['parameters'];
 		}
 	}
 
 	/**
+	 * Attempt to decode the content and populate parameters
+	 */
+	protected function decodeContent() {
+		if ($this->contentDecoded) {
+			return;
+		}
+		$params = [];
+
+		// 'application/json' must be decoded manually.
+		if (strpos($this->getHeader('Content-Type'), 'application/json') !== false) {
+			$params = json_decode(file_get_contents($this->inputStream), true);
+			if(count($params) > 0) {
+				$this->items['params'] = $params;
+				if($this->method === 'POST') {
+					$this->items['post'] = $params;
+				}
+			}
+
+		// Handle application/x-www-form-urlencoded for methods other than GET
+		// or post correctly
+		} elseif($this->method !== 'GET'
+				&& $this->method !== 'POST'
+				&& strpos($this->getHeader('Content-Type'), 'application/x-www-form-urlencoded') !== false) {
+
+			parse_str(file_get_contents($this->inputStream), $params);
+			if(is_array($params)) {
+				$this->items['params'] = $params;
+			}
+		}
+
+		if (is_array($params)) {
+			$this->items['parameters'] = array_merge($this->items['parameters'], $params);
+		}
+		$this->contentDecoded = true;
+	}
+
+
+	/**
 	 * Checks if the CSRF check was correct
 	 * @return bool true if CSRF check passed
-	 * @see OC_Util::callRegister()
 	 */
 	public function passesCSRFCheck() {
-		if($this->items['requesttoken'] === false) {
+		if($this->csrfTokenManager === null) {
 			return false;
 		}
 
@@ -414,15 +458,9 @@ class Request implements \ArrayAccess, \Countable, IRequest {
 			//no token found.
 			return false;
 		}
+		$token = new CsrfToken($token);
 
-		// Check if the token is valid
-		if($token !== $this->items['requesttoken']) {
-			// Not valid
-			return false;
-		} else {
-			// Valid token
-			return true;
-		}
+		return $this->csrfTokenManager->isTokenValid($token);
 	}
 
 	/**
@@ -436,7 +474,7 @@ class Request implements \ArrayAccess, \Countable, IRequest {
 		}
 
 		if(empty($this->requestId)) {
-			$this->requestId = $this->secureRandom->getLowStrengthGenerator()->generate(20);
+			$this->requestId = $this->secureRandom->generate(20);
 		}
 
 		return $this->requestId;
@@ -454,7 +492,10 @@ class Request implements \ArrayAccess, \Countable, IRequest {
 		$trustedProxies = $this->config->getSystemValue('trusted_proxies', []);
 
 		if(is_array($trustedProxies) && in_array($remoteAddress, $trustedProxies)) {
-			$forwardedForHeaders = $this->config->getSystemValue('forwarded_for_headers', []);
+			$forwardedForHeaders = $this->config->getSystemValue('forwarded_for_headers', [
+				'HTTP_X_FORWARDED_FOR'
+				// only have one default, so we cannot ship an insecure product out of the box
+			]);
 
 			foreach($forwardedForHeaders as $header) {
 				if(isset($this->server[$header])) {
@@ -478,7 +519,8 @@ class Request implements \ArrayAccess, \Countable, IRequest {
 	 */
 	private function isOverwriteCondition($type = '') {
 		$regex = '/' . $this->config->getSystemValue('overwritecondaddr', '')  . '/';
-		return $regex === '//' || preg_match($regex, $this->server['REMOTE_ADDR']) === 1
+		$remoteAddr = isset($this->server['REMOTE_ADDR']) ? $this->server['REMOTE_ADDR'] : '';
+		return $regex === '//' || preg_match($regex, $remoteAddr) === 1
 		|| $type !== 'protocol';
 	}
 
@@ -508,11 +550,33 @@ class Request implements \ArrayAccess, \Countable, IRequest {
 
 		if (isset($this->server['HTTPS'])
 			&& $this->server['HTTPS'] !== null
-			&& $this->server['HTTPS'] !== 'off') {
+			&& $this->server['HTTPS'] !== 'off'
+			&& $this->server['HTTPS'] !== '') {
 			return 'https';
 		}
 
 		return 'http';
+	}
+
+	/**
+	 * Returns the used HTTP protocol.
+	 *
+	 * @return string HTTP protocol. HTTP/2, HTTP/1.1 or HTTP/1.0.
+	 */
+	public function getHttpProtocol() {
+		$claimedProtocol = strtoupper($this->server['SERVER_PROTOCOL']);
+
+		$validProtocols = [
+			'HTTP/1.0',
+			'HTTP/1.1',
+			'HTTP/2',
+		];
+
+		if(in_array($claimedProtocol, $validProtocols, true)) {
+			return $claimedProtocol;
+		}
+
+		return 'HTTP/1.1';
 	}
 
 	/**
@@ -566,7 +630,7 @@ class Request implements \ArrayAccess, \Countable, IRequest {
 		if (strpos($pathInfo, $name) === 0) {
 			$pathInfo = substr($pathInfo, strlen($name));
 		}
-		if($pathInfo === '/'){
+		if($pathInfo === false || $pathInfo === '/'){
 			return '';
 		} else {
 			return $pathInfo;
@@ -620,6 +684,9 @@ class Request implements \ArrayAccess, \Countable, IRequest {
 	 * @return bool true if at least one of the given agent matches, false otherwise
 	 */
 	public function isUserAgent(array $agent) {
+		if (!isset($this->server['HTTP_USER_AGENT'])) {
+			return false;
+		}
 		foreach ($agent as $regex) {
 			if (preg_match($regex, $this->server['HTTP_USER_AGENT'])) {
 				return true;
@@ -659,11 +726,6 @@ class Request implements \ArrayAccess, \Countable, IRequest {
 	 * @return string Server host
 	 */
 	public function getServerHost() {
-		// FIXME: Ugly workaround that we need to get rid of
-		if (\OC::$CLI && defined('PHPUNIT_RUN')) {
-			return 'localhost';
-		}
-
 		// overwritehost is always trusted
 		$host = $this->getOverwriteHost();
 		if ($host !== null) {
@@ -681,7 +743,11 @@ class Request implements \ArrayAccess, \Countable, IRequest {
 			return $host;
 		} else {
 			$trustedList = $this->config->getSystemValue('trusted_domains', []);
-			return $trustedList[0];
+			if(!empty($trustedList)) {
+				return $trustedList[0];
+			} else {
+				return '';
+			}
 		}
 	}
 

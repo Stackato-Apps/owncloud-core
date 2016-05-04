@@ -82,7 +82,6 @@ OC.L10N.register(
     "Backup (Replica) Port" : "Kopia zapasowa (repliki) Port",
     "Disable Main Server" : "Wyłącz serwer główny",
     "Only connect to the replica server." : "Połącz tylko do repliki serwera.",
-    "Case insensitive LDAP server (Windows)" : "Serwer LDAP nie rozróżniający wielkości liter (Windows)",
     "Turn off SSL certificate validation." : "Wyłączyć sprawdzanie poprawności certyfikatu SSL.",
     "Not recommended, use it for testing only! If connection only works with this option, import the LDAP server's SSL certificate in your %s server." : "Nie polecane, używać tylko w celu testowania! Jeśli połączenie działa tylko z tą opcją, zaimportuj certyfikat SSL serwera LDAP na swój %s.",
     "Cache Time-To-Live" : "Przechowuj czas życia",
@@ -121,6 +120,10 @@ OC.L10N.register(
     "Username-LDAP User Mapping" : "Mapowanie użytkownika LDAP",
     "Usernames are used to store and assign (meta) data. In order to precisely identify and recognize users, each LDAP user will have an internal username. This requires a mapping from username to LDAP user. The created username is mapped to the UUID of the LDAP user. Additionally the DN is cached as well to reduce LDAP interaction, but it is not used for identification. If the DN changes, the changes will be found. The internal username is used all over. Clearing the mappings will have leftovers everywhere. Clearing the mappings is not configuration sensitive, it affects all LDAP configurations! Never clear the mappings in a production environment, only in a testing or experimental stage." : "Nazwy użytkowników służą do przechowywania i przypisywania (meta) danych. W celu dokładnego określenia i rozpoznawania użytkowników, każdy użytkownik LDAP ma przypisaną wewnętrzną nazwę użytkownika. Wymaga to mapowania nazwy użytkownika do użytkownika LDAP. Utworzona nazwa użytkownika jest odwzorowywana na UUID użytkownika LDAP. Dodatkowo DN są buforowane, także w celu zmniejszenia oddziaływania LDAP, ale nie są stosowane do identyfikacji. Po zmianie DN, będzie można znaleźć zmiany. Wewnętrzna nazwa jest używana wszędzie. Usuwanie mapowania będzie miało wpływ wszędzie. Usuwanie mapowania nie jest wrażliwe na konfiguracje, dotyczy to wszystkich konfiguracji LDAP! Nigdy nie usuwaj mapowania w środowisku produkcyjnym, jest to dopuszczalne tylko w fazie eksperymentalnej, testowej.",
     "Clear Username-LDAP User Mapping" : "Czyść Mapowanie użytkownika LDAP",
-    "Clear Groupname-LDAP Group Mapping" : "Czyść Mapowanie nazwy grupy LDAP"
+    "Clear Groupname-LDAP Group Mapping" : "Czyść Mapowanie nazwy grupy LDAP",
+    "Dynamic Group Member URL" : "URL Członka Grupy Dynamicznej",
+    "The DN of the client user with which the bind shall be done, e.g. uid=agent,dc=example,dc=com. For anonymous access, leave DN and Password empty." : "DN użytkownika klienta, z którym powiązanie wykonuje się, np. uid=agent,dc=example,dc=com. Dla dostępu anonimowego pozostawić DN i hasło puste",
+    "{nthServer}. Server" : "{nthServer}. Serwer",
+    "The Base DN appears to be wrong" : "Base DN wygląda na błedne"
 },
 "nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);");

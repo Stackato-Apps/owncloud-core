@@ -5,6 +5,7 @@ OC.L10N.register(
     "Couldn't restore %s" : "Nie można przywrócić %s",
     "Deleted files" : "Usunięte pliki",
     "Restore" : "Przywróć",
+    "Delete" : "Usuń",
     "Delete permanently" : "Trwale usuń",
     "Error" : "Błąd",
     "restored" : "przywrócony",
@@ -14,6 +15,6 @@ OC.L10N.register(
     "Select all" : "Wybierz wszystko",
     "Name" : "Nazwa",
     "Deleted" : "Usunięte",
-    "Delete" : "Usuń"
+    "This directory is unavailable, please check the logs or contact the administrator" : "Ten folder jest niedostępny, proszę sprawdzić logi lub skontaktować się z administratorem."
 },
 "nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);");

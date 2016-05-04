@@ -4,8 +4,9 @@
  * @author Joas Schilling <nickvergessen@owncloud.com>
  * @author Morris Jobke <hey@morrisjobke.de>
  * @author Robin Appelman <icewind@owncloud.com>
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
  *
- * @copyright Copyright (c) 2015, ownCloud, Inc.
+ * @copyright Copyright (c) 2016, ownCloud, Inc.
  * @license AGPL-3.0
  *
  * This code is free software: you can redistribute it and/or modify
@@ -26,6 +27,13 @@ namespace OCA\Files_sharing\Tests;
 
 use OCA\Files\Share;
 
+/**
+ * Class UnshareChildren
+ *
+ * @group DB
+ *
+ * @package OCA\Files_sharing\Tests
+ */
 class UnshareChildren extends TestCase {
 
 	protected $subsubfolder;
@@ -40,7 +48,7 @@ class UnshareChildren extends TestCase {
 		\OCP\Util::connectHook('OC_Filesystem', 'post_delete', '\OCA\Files_Sharing\Hooks', 'unshareChildren');
 
 		$this->folder = self::TEST_FOLDER_NAME;
-		$this->subfolder  = '/subfolder_share_api_test';
+		$this->subfolder = '/subfolder_share_api_test';
 		$this->subsubfolder = '/subsubfolder_share_api_test';
 
 		$this->filename = '/share-api-test';
@@ -49,12 +57,14 @@ class UnshareChildren extends TestCase {
 		$this->view->mkdir($this->folder);
 		$this->view->mkdir($this->folder . $this->subfolder);
 		$this->view->mkdir($this->folder . $this->subfolder . $this->subsubfolder);
-		$this->view->file_put_contents($this->folder.$this->filename, $this->data);
+		$this->view->file_put_contents($this->folder . $this->filename, $this->data);
 		$this->view->file_put_contents($this->folder . $this->subfolder . $this->filename, $this->data);
 	}
 
 	protected function tearDown() {
-		$this->view->deleteAll($this->folder);
+		if ($this->view) {
+			$this->view->deleteAll($this->folder);
+		}
 
 		self::$tempStorage = null;
 

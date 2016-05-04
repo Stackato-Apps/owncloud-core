@@ -54,7 +54,6 @@ OC.L10N.register(
     "Backup (Replica) Port" : "Puerto para copia de seguridad (réplica)",
     "Disable Main Server" : "Deshabilitar el Servidor Principal",
     "Only connect to the replica server." : "Conectarse únicamente al servidor de réplica.",
-    "Case insensitive LDAP server (Windows)" : "Servidor de LDAP insensible a mayúsculas/minúsculas (Windows)",
     "Turn off SSL certificate validation." : "Desactivar la validación por certificado SSL.",
     "Not recommended, use it for testing only! If connection only works with this option, import the LDAP server's SSL certificate in your %s server." : "No es recomendado, ¡Usalo solamente para pruebas! Si la conexión únicamente funciona con esta opción, importá el certificado SSL del servidor LDAP en tu servidor %s.",
     "Cache Time-To-Live" : "Tiempo de vida del caché",
@@ -91,6 +90,7 @@ OC.L10N.register(
     "UUID Attribute for Groups:" : "Atributo UUID para grupos:",
     "Username-LDAP User Mapping" : "Asignación del Nombre de usuario de un usuario LDAP",
     "Clear Username-LDAP User Mapping" : "Borrar la asignación de los Nombres de usuario de los usuarios LDAP",
-    "Clear Groupname-LDAP Group Mapping" : "Borrar la asignación de los Nombres de grupo de los grupos de LDAP"
+    "Clear Groupname-LDAP Group Mapping" : "Borrar la asignación de los Nombres de grupo de los grupos de LDAP",
+    "The DN of the client user with which the bind shall be done, e.g. uid=agent,dc=example,dc=com. For anonymous access, leave DN and Password empty." : "El DN del usuario cliente con el que se hará la asociación, p.ej. uid=agente,dc=ejemplo,dc=com. Para acceso anónimo, dejá DN y contraseña vacíos."
 },
 "nplurals=2; plural=(n != 1);");
